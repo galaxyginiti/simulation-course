@@ -1,0 +1,4 @@
+node_modules
+dist
+go.mod
+go.sum
