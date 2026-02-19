@@ -369,3 +369,159 @@
     flex-direction: column;
   }
 }
+
+/* ═══════════════════════════════════════
+   Блок физической модели
+═══════════════════════════════════════ */
+.physics-block {
+  background: #f0f4ff;
+  border: 1px solid #c5d3f5;
+  border-radius: 15px;
+  margin-bottom: 25px;
+  overflow: hidden;
+}
+
+.physics-toggle {
+  width: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.2s;
+}
+.physics-toggle:hover { opacity: 0.9; }
+
+.physics-body {
+  padding: 20px 25px;
+}
+
+.physics-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px;
+  margin-bottom: 15px;
+}
+@media (max-width: 768px) {
+  .physics-columns { grid-template-columns: 1fr; }
+}
+
+.physics-col h4 {
+  color: #334;
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.physics-col h4:first-child { margin-top: 0; }
+
+.physics-col p {
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 4px;
+}
+
+/* Формулы */
+.formula {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: 'Courier New', monospace;
+  font-size: 1.05rem;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin: 8px 0;
+  border-left: 4px solid #667eea;
+  letter-spacing: 0.03em;
+}
+.formula.small {
+  font-size: 0.92rem;
+}
+
+.formula-live {
+  background: #fffbea;
+  border: 1px dashed #f0c040;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 0.88rem;
+  color: #444;
+  font-family: 'Courier New', monospace;
+  line-height: 1.8;
+  word-break: break-all;
+}
+
+/* Подсветка числа Куранта */
+.r-ok  { color: #27ae60; font-weight: 700; }
+.r-bad { color: #e74c3c; font-weight: 700; }
+
+/* Подсказки под полями ввода */
+.hint-ok  { color: #27ae60; }
+.hint-bad { color: #e74c3c; font-weight: 600; }
+
+/* Текстовые классы в таблице результатов */
+.text-ok  { color: #27ae60; }
+.text-bad { color: #e74c3c; }
+.mono { font-family: 'Courier New', monospace; }
+
+/* ═══════════════════════════════════════
+   Выводы по лабораторной работе
+═══════════════════════════════════════ */
+.conclusions-block {
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 12px;
+  padding: 20px 25px;
+  margin: 20px 0;
+}
+
+.conclusions-block h4 {
+  color: #667eea;
+  font-size: 1.1rem;
+  margin: 0 0 16px;
+}
+
+.conclusions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .conclusions-grid { grid-template-columns: 1fr; }
+}
+
+.conclusion-item {
+  background: #f8f9ff;
+  border-radius: 8px;
+  padding: 12px 15px;
+  border-left: 4px solid #764ba2;
+}
+
+.concl-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #764ba2;
+  margin-bottom: 6px;
+  font-family: 'Courier New', monospace;
+}
+
+.concl-value {
+  font-size: 0.88rem;
+  color: #333;
+  line-height: 1.6;
+}
+.concl-value strong { color: #e74c3c; }
+
+/* ═══════════════════════════════════════
+   SVG-график температуры
+═══════════════════════════════════════ */
+.chart-wrapper {
+  background: white;
+  border-radius: 10px;
+  padding: 8px 4px 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  margin-bottom: 8px;
+}
+

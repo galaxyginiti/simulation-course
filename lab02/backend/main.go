@@ -10,99 +10,125 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// SimulationParams contains parameters for heat conduction simulation
+// SimulationParams — параметры моделирования теплопроводности стержня/пластины
 type SimulationParams struct {
-	Length        float64 `json:"length"`        // Length of plate (m)
-	TimeStep      float64 `json:"timeStep"`      // Time step (s)
-	SpaceStep     float64 `json:"spaceStep"`     // Space step (m)
-	TotalTime     float64 `json:"totalTime"`     // Total simulation time (s)
-	InitialTemp   float64 `json:"initialTemp"`   // Initial temperature (°C)
-	LeftBoundary  float64 `json:"leftBoundary"`  // Left boundary temperature (°C)
-	RightBoundary float64 `json:"rightBoundary"` // Right boundary temperature (°C)
-	Alpha         float64 `json:"alpha"`         // Thermal diffusivity (m²/s)
+	Length        float64 `json:"length"`        // Длина пластины (м)
+	TimeStep      float64 `json:"timeStep"`      // Шаг по времени Δt (с)
+	SpaceStep     float64 `json:"spaceStep"`     // Шаг по пространству Δx (м)
+	TotalTime     float64 `json:"totalTime"`     // Полное время моделирования (с)
+	InitialTemp   float64 `json:"initialTemp"`   // Начальная температура T₀ (°C)
+	LeftBoundary  float64 `json:"leftBoundary"`  // Температура левой границы (°C)
+	RightBoundary float64 `json:"rightBoundary"` // Температура правой границы (°C)
+	Alpha         float64 `json:"alpha"`         // Коэффициент температуропроводности α (м²/с)
 }
 
-// SimulationResult contains the results of simulation
+// SimulationResult — результаты одного шага по времени
 type SimulationResult struct {
-	Temperatures []float64 `json:"temperatures"`
-	Time         float64   `json:"time"`
-	CenterTemp   float64   `json:"centerTemp"`
-	Stable       bool      `json:"stable"`
+	Temperatures []float64 `json:"temperatures"` // Распределение температуры по узлам сетки
+	Time         float64   `json:"time"`         // Текущее модельное время (с)
+	CenterTemp   float64   `json:"centerTemp"`   // Температура в центре пластины (°C)
+	Stable       bool      `json:"stable"`       // Признак устойчивости схемы
+	R            float64   `json:"r"`            // Параметр Куранта r = α·Δt/Δx²
+	FourierNum   float64   `json:"fourierNum"`   // Число Фурье Fo = α·t/L² (безразмерное время)
+	LeftFlux     float64   `json:"leftFlux"`     // Тепловой поток на левой границе (°C/м), нормированный на α
+	RightFlux    float64   `json:"rightFlux"`    // Тепловой поток на правой границе (°C/м), нормированный на α
 }
 
 var upgrader = websocket.Upgrader{
+	// Разрешаем подключения с любого источника (для разработки)
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-// Default material: Aluminum
-// Thermal diffusivity α = k/(ρ*c) where:
-// k - thermal conductivity (W/(m·K))
-// ρ - density (kg/m³)
-// c - specific heat capacity (J/(kg·K))
-// For aluminum: k=237, ρ=2700, c=900
-// α ≈ 9.7e-5 m²/s
+// Материал по умолчанию: алюминий.
+// Коэффициент температуропроводности: α = k / (ρ · c)
+//   k   — коэффициент теплопроводности (Вт/(м·К)),   k  = 237
+//   ρ   — плотность (кг/м³),                          ρ  = 2700
+//   c   — удельная теплоёмкость (Дж/(кг·К)),          c  = 900
+//   α   ≈ 9.7×10⁻⁵ м²/с
 
+// simulateHeatConduction решает уравнение теплопроводности ∂T/∂t = α·∂²T/∂x²
+// явной конечно-разностной схемой (схема Эйлера вперёд):
+//
+//   T_i^(n+1) = T_i^n + r·(T_{i+1}^n - 2·T_i^n + T_{i-1}^n)
+//
+// где r = α·Δt/Δx² — параметр Куранта.
+// Схема устойчива при r ≤ 0.5 (условие Куранта–Фридрихса–Леви).
 func simulateHeatConduction(params SimulationParams) ([]SimulationResult, error) {
-	// Calculate grid size
+	// Число узлов пространственной сетки
 	n := int(math.Ceil(params.Length/params.SpaceStep)) + 1
-	
-	// Check stability condition (Courant condition)
+
+	// Параметр Куранта: определяет устойчивость явной схемы
+	// При r > 0.5 численное решение расходится (нарастают осцилляции)
 	r := params.Alpha * params.TimeStep / (params.SpaceStep * params.SpaceStep)
 	if r > 0.5 {
-		return nil, fmt.Errorf("unstable parameters: r = %f > 0.5", r)
+		return nil, fmt.Errorf("нестабильные параметры: r = %.4f > 0.5 (нарушено условие Куранта)", r)
 	}
 
-	// Initialize temperature array
+	// Массивы температур на текущем и следующем шаге
 	T := make([]float64, n)
 	Tnew := make([]float64, n)
-	
-	// Set initial conditions
+
+	// Начальные условия: однородное поле T(x, 0) = T₀
 	for i := range T {
 		T[i] = params.InitialTemp
 	}
-	
-	// Boundary conditions
+
+	// Граничные условия Дирихле (температура зафиксирована на торцах)
 	T[0] = params.LeftBoundary
 	T[n-1] = params.RightBoundary
 
 	results := []SimulationResult{}
 	currentTime := 0.0
 	steps := int(params.TotalTime / params.TimeStep)
-	
-	// Store initial state
-	centerIdx := n / 2
-	results = append(results, SimulationResult{
-		Temperatures: append([]float64{}, T...),
-		Time:         currentTime,
-		CenterTemp:   T[centerIdx],
-		Stable:       r <= 0.5,
-	})
 
-	// Time stepping
+	// Индекс центрального узла
+	centerIdx := n / 2
+
+	// Вспомогательная функция расчёта производных характеристик
+	makeResult := func(temps []float64, t float64) SimulationResult {
+		// Число Фурье Fo = α·t/L² — безразмерное время диффузии тепла
+		fo := 0.0
+		if params.Length > 0 {
+			fo = params.Alpha * t / (params.Length * params.Length)
+		}
+		// Градиент температуры у левой и правой границ (конечная разность первого порядка)
+		leftFlux := (temps[1] - temps[0]) / params.SpaceStep
+		rightFlux := (temps[n-1] - temps[n-2]) / params.SpaceStep
+		return SimulationResult{
+			Temperatures: append([]float64{}, temps...),
+			Time:         t,
+			CenterTemp:   temps[centerIdx],
+			Stable:       r <= 0.5,
+			R:            r,
+			FourierNum:   fo,
+			LeftFlux:     leftFlux,
+			RightFlux:    rightFlux,
+		}
+	}
+
+	// Сохраняем начальное состояние (t = 0)
+	results = append(results, makeResult(T, currentTime))
+
+	// Итерация по времени
 	for step := 0; step < steps; step++ {
-		// Apply finite difference scheme
+		// Явная разностная схема для внутренних узлов
 		for i := 1; i < n-1; i++ {
 			Tnew[i] = T[i] + r*(T[i+1]-2*T[i]+T[i-1])
 		}
-		
-		// Boundary conditions
+
+		// Поддерживаем граничные условия Дирихле
 		Tnew[0] = params.LeftBoundary
 		Tnew[n-1] = params.RightBoundary
-		
-		// Copy new to old
+
+		// Переходим к следующему шагу
 		copy(T, Tnew)
 		currentTime += params.TimeStep
 
-		// Store result every few steps
+		// Сохраняем каждый 10-й шаг и последний шаг
 		if step%10 == 0 || step == steps-1 {
-			results = append(results, SimulationResult{
-				Temperatures: append([]float64{}, T...),
-				Time:         currentTime,
-				CenterTemp:   T[centerIdx],
-				Stable:       r <= 0.5,
-			})
+			results = append(results, makeResult(T, currentTime))
 		}
 	}
 
@@ -112,7 +138,7 @@ func simulateHeatConduction(params SimulationParams) ([]SimulationResult, error)
 func handleSimulation(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
+		log.Println("Ошибка обновления соединения до WebSocket:", err)
 		return
 	}
 	defer conn.Close()
@@ -121,13 +147,13 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 		var params SimulationParams
 		err := conn.ReadJSON(&params)
 		if err != nil {
-			log.Println("Read error:", err)
+			log.Println("Ошибка чтения параметров:", err)
 			break
 		}
 
-		// Validate and set defaults
+		// Подстановка значений по умолчанию, если клиент не передал параметр
 		if params.Alpha == 0 {
-			params.Alpha = 9.7e-5 // Aluminum
+			params.Alpha = 9.7e-5 // Алюминий
 		}
 		if params.Length == 0 {
 			params.Length = 1.0
@@ -144,10 +170,10 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Send results back
+		// Отправляем результаты клиенту пошагово
 		for _, result := range results {
 			if err := conn.WriteJSON(result); err != nil {
-				log.Println("Write error:", err)
+				log.Println("Ошибка отправки результата:", err)
 				return
 			}
 		}
@@ -166,10 +192,46 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+// PhysicsInfo описывает физическую модель, реализованную в симуляции
+type PhysicsInfo struct {
+	Equation        string `json:"equation"`        // Уравнение в дифференциальной форме
+	Scheme          string `json:"scheme"`          // Численная схема
+	StabilityRule   string `json:"stabilityRule"`   // Условие устойчивости
+	FourierExpl     string `json:"fourierExpl"`     // Пояснение числа Фурье
+	AlphaExpl       string `json:"alphaExpl"`       // Пояснение коэффициента α
+	BoundaryExpl    string `json:"boundaryExpl"`    // Пояснение граничных условий
+	MaterialAluminum struct {
+		K     float64 `json:"k"`     // Теплопроводность, Вт/(м·К)
+		Rho   float64 `json:"rho"`   // Плотность, кг/м³
+		C     float64 `json:"c"`     // Удельная теплоёмкость, Дж/(кг·К)
+		Alpha float64 `json:"alpha"` // Коэффициент температуропроводности, м²/с
+	} `json:"materialAluminum"`
+}
+
+func handlePhysics(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	info := PhysicsInfo{
+		Equation:      "∂T/∂t = α · ∂²T/∂x²",
+		Scheme:        "T_i^(n+1) = T_i^n + r·(T_{i+1}^n − 2·T_i^n + T_{i-1}^n)",
+		StabilityRule: "r = α·Δt/Δx² ≤ 0.5",
+		FourierExpl:   "Fo = α·t/L² — безразмерное время; при Fo ~ 0.1 тепло достигает центра",
+		AlphaExpl:     "α = k/(ρ·c) — определяет скорость выравнивания температуры",
+		BoundaryExpl:  "Дирихле: температура на торцах фиксирована на всё время счёта",
+	}
+	info.MaterialAluminum.K = 237
+	info.MaterialAluminum.Rho = 2700
+	info.MaterialAluminum.C = 900
+	info.MaterialAluminum.Alpha = 9.7e-5
+	json.NewEncoder(w).Encode(info)
+}
+
 func main() {
 	http.HandleFunc("/ws", handleSimulation)
 	http.HandleFunc("/health", handleHealth)
+	http.HandleFunc("/physics", handlePhysics)
 
-	fmt.Println("Server starting on :8080")
+	fmt.Println("Сервер запускается на порту :8080")
+	fmt.Println("WebSocket: ws://localhost:8080/ws")
+	fmt.Println("Физика:    http://localhost:8080/physics")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
