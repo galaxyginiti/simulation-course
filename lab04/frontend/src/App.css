@@ -1,0 +1,20 @@
+/* Дополнительные стили компонентов */
+.formula-block {
+  font-family: 'Courier New', Courier, monospace;
+  background: #f1f3f5;
+  border-left: 4px solid #339af0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.deviation-good {
+  color: #2f9e44;
+  font-weight: 600;
+}
+
+.deviation-ok {
+  color: #e67700;
+  font-weight: 600;
+}
