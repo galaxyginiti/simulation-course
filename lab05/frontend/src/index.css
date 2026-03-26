@@ -1,0 +1,6 @@
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  font-family: Inter, system-ui, Helvetica, Arial, sans-serif;
+  background-color: #f8fafc;
+  color: #1a1b1e;
+}
