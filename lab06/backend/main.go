@@ -5,7 +5,7 @@
 //     1. Генерируем α ~ U[0, 1) — базовый датчик.
 //
 //     ✦ ТОЧКА ПСЕВДОСЛУЧАЙНОСТИ ✦
-//     α — вещественное число (float64) из [0, 1), НЕ процент.
+//     α — вещественное число (float64) из [0, 1).
 //     2. Строим CDF: F(xk) = p1 + p2 + … + pk.
 //     3. X = xk, если F(xk-1) ≤ α < F(xk).
 //
@@ -16,11 +16,12 @@
 //     - критерий χ² при df = k-1 и α=0.05
 //   при N = 10, 100, 1000, 10000.
 //
-// Часть 2 — Нормальная СВ X ~ N(0, 1) методом Бокса — Мюллера:
+// Часть 2 — Нормальная СВ X ~ N(μ, σ²) методом Бокса — Мюллера:
 //     ✦ ТОЧКА ПСЕВДОСЛУЧАЙНОСТИ ✦
-//     α1, α2 ~ U[0, 1) — два независимых числа, каждое НЕ процент.
+//     α1, α2 ~ U[0, 1) — два независимых числа.
 //     Z1 = √(-2 ln α1) · cos(2π α2)  → Z1 ~ N(0, 1)
 //     Z2 = √(-2 ln α1) · sin(2π α2)  → Z2 ~ N(0, 1)
+//     X  = μ + σ·Z                    → X  ~ N(μ, σ²)  ← пользователь задаёт μ и σ²
 //
 // API:
 //   GET /api/simulate → полный ответ: дискретная + нормальная СВ
@@ -33,6 +34,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 )
 
 // ─── Распределение задания ────────────────────────────────────────────────────
@@ -93,6 +95,10 @@ type NormalBin struct {
 
 type NormalResult struct {
 	N         int         `json:"n"`
+	// ─── Часть 2: параметры N(μ, σ²), задаваемые пользователем ───
+	TheoMean  float64     `json:"theoMean"`  // μ — заданное матожидание
+	TheoVar   float64     `json:"theoVar"`   // σ² — заданная дисперсия
+	// ─────────────────────────────────────────────────────────────
 	EmpMean   float64     `json:"empMean"`
 	EmpStdDev float64     `json:"empStdDev"`
 	Histogram []NormalBin `json:"histogram"`
@@ -104,6 +110,10 @@ type SimResponse struct {
 	TheoVar         float64          `json:"theoVar"`
 	DiscreteResults []DiscreteResult `json:"discreteResults"`
 	NormalResults   []NormalResult   `json:"normalResults"`
+	// ─── Часть 2: параметры N(μ, σ²), переданные пользователем ───
+	NormalMean      float64          `json:"normalMean"`  // μ
+	NormalVar       float64          `json:"normalVar"`   // σ²
+	// ──────────────────────────────────────────────────────────────
 }
 
 // ─── Алгоритмы ────────────────────────────────────────────────────────────────
@@ -111,7 +121,7 @@ type SimResponse struct {
 // sampleDiscrete реализует инверсный метод для дискретной СВ.
 func sampleDiscrete(rng *rand.Rand) float64 {
 	// ✦ ТОЧКА ПСЕВДОСЛУЧАЙНОСТИ ✦
-	// α — вещественное число (float64) из [0, 1), НЕ процент.
+	// α — вещественное число (float64) из [0, 1).
 	// Пример: α = 0.351…
 	// CDF: F(1)=0.1, F(2)=0.3, F(3)=0.7, F(4)=0.9, F(5)=1.0
 	// 0.3 ≤ 0.351 < 0.7  →  X = 3
@@ -146,7 +156,6 @@ func computeDiscrete(n int) DiscreteResult {
 
 	fn := float64(n)
 	empMean := sum / fn
-	// Смещённая дисперсия (для наглядности при малых N)
 	empVar := sumSq/fn - empMean*empMean
 
 	observed := make([]float64, k)
@@ -176,30 +185,35 @@ func computeDiscrete(n int) DiscreteResult {
 	}
 }
 
-// normalPDF — плотность стандартного нормального N(0,1).
-func normalPDF(x float64) float64 {
-	return math.Exp(-0.5*x*x) / math.Sqrt(2*math.Pi)
+// normalPDF — плотность нормального N(μ, σ²) в точке x.
+// ─── Часть 2: плотность вычисляется с учётом задаваемых μ и σ² ───
+func normalPDF(x, mu, sigma float64) float64 {
+	z := (x - mu) / sigma
+	return math.Exp(-0.5*z*z) / (sigma * math.Sqrt(2*math.Pi))
 }
 
-func computeNormal(n int) NormalResult {
+// ─── Часть 2: mu — матожидание, variance — дисперсия, задаются пользователем ───
+func computeNormal(n int, mu, variance float64) NormalResult {
 	rng := rand.New(rand.NewSource(42))
 	values := make([]float64, n)
 
 	for i := 0; i < n; i += 2 {
 		// ✦ ТОЧКА ПСЕВДОСЛУЧАЙНОСТИ ✦
-		// α1, α2 — два вещественных числа (float64) из [0, 1), НЕ проценты.
+		// α1, α2 — два вещественных числа (float64) из [0, 1).
 		// Метод Бокса–Мюллера: из двух равномерных чисел получаем два нормальных.
 		alpha1 := rng.Float64()
 		if alpha1 == 0 {
-			alpha1 = 1e-300 // защита от log(0)
+			alpha1 = 1e-300
 		}
 		alpha2 := rng.Float64()
 		mag := math.Sqrt(-2 * math.Log(alpha1))
 		z1 := mag * math.Cos(2*math.Pi*alpha2)
 		z2 := mag * math.Sin(2*math.Pi*alpha2)
-		values[i] = z1
+		// ─── Часть 2: преобразование Z ~ N(0,1) → X ~ N(μ, σ²): X = μ + σ·Z ───
+		sigma := math.Sqrt(variance)
+		values[i] = mu + sigma*z1
 		if i+1 < n {
-			values[i+1] = z2
+			values[i+1] = mu + sigma*z2
 		}
 	}
 
@@ -211,15 +225,19 @@ func computeNormal(n int) NormalResult {
 	empMean := sum / float64(n)
 	empStd := math.Sqrt(sumSq/float64(n) - empMean*empMean)
 
-	// Гистограмма от -4 до +4, шаг 0.5 (16 бинов)
-	const binMin, binMax, binStep = -4.0, 4.0, 0.5
-	nBins := int((binMax - binMin) / binStep)
+	// ─── Часть 2: гистограмма строится вокруг μ ± 4σ ───
+	sigma := math.Sqrt(variance)
+	binMin := mu - 4*sigma
+	binMax := mu + 4*sigma
+	binStep := (binMax - binMin) / 16.0
+	nBins := 16
 	bins := make([]NormalBin, nBins)
 	for i := range bins {
 		from := binMin + float64(i)*binStep
 		to := from + binStep
 		mid := (from + to) / 2
-		bins[i] = NormalBin{From: from, To: to, Mid: mid, Dens: normalPDF(mid)}
+		// ─── Часть 2: плотность вычисляется для N(μ, σ²) ───
+		bins[i] = NormalBin{From: from, To: to, Mid: mid, Dens: normalPDF(mid, mu, sigma)}
 	}
 	for _, v := range values {
 		if v < binMin || v >= binMax {
@@ -234,7 +252,7 @@ func computeNormal(n int) NormalResult {
 		bins[i].Freq = bins[i].Freq / float64(n) / binStep // нормировка → плотность
 	}
 
-	return NormalResult{N: n, EmpMean: empMean, EmpStdDev: empStd, Histogram: bins}
+	return NormalResult{N: n, TheoMean: mu, TheoVar: variance, EmpMean: empMean, EmpStdDev: empStd, Histogram: bins}
 }
 
 // ─── HTTP-обработчик ─────────────────────────────────────────────────────────
@@ -247,6 +265,22 @@ func handleSimulate(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
+	// ─── Часть 2: читаем μ и σ² из query-параметров (?mean=0&variance=1) ───
+	// По умолчанию: μ=0, σ²=1 (стандартное нормальное распределение)
+	normalMean := 0.0
+	normalVar := 1.0
+	if v := r.URL.Query().Get("mean"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			normalMean = parsed
+		}
+	}
+	if v := r.URL.Query().Get("variance"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil && parsed > 0 {
+			normalVar = parsed
+		}
+	}
+	// ──────────────────────────────────────────────────────────────────────────
 
 	dist := make([]DistItem, len(distValues))
 	for i := range distValues {
@@ -262,7 +296,8 @@ func handleSimulate(w http.ResponseWriter, r *http.Request) {
 	normSizes := []int{100, 1000, 10000}
 	normResults := make([]NormalResult, len(normSizes))
 	for i, n := range normSizes {
-		normResults[i] = computeNormal(n)
+		// ─── Часть 2: передаём μ и σ² в генератор ───
+		normResults[i] = computeNormal(n, normalMean, normalVar)
 	}
 
 	json.NewEncoder(w).Encode(SimResponse{
@@ -271,6 +306,8 @@ func handleSimulate(w http.ResponseWriter, r *http.Request) {
 		TheoVar:         theoVar,
 		DiscreteResults: discResults,
 		NormalResults:   normResults,
+		NormalMean:      normalMean,
+		NormalVar:       normalVar,
 	})
 }
 

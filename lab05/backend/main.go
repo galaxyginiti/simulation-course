@@ -59,7 +59,7 @@ var answers = []Answer{
 // ─── Структуры ответов ───────────────────────────────────────────────────────
 
 type AlphaResult struct {
-	Alpha float64 `json:"alpha"` // α ∈ [0, 1) — вещественное число, не процент
+	Alpha float64 `json:"alpha"` // α ∈ [0, 1) — вещественное число
 	IsYes bool    `json:"isYes"`
 }
 

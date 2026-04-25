@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react'
 import {
   MantineProvider, Container, Title, Text, Stack, Card, Table,
   Button, Grid, Badge, Group, Tabs, Code, Loader, Center,
-  Paper, ScrollArea, Divider,
+  Paper, ScrollArea, Divider, NumberInput,
 } from '@mantine/core'
 import { BarChart, CompositeChart } from '@mantine/charts'
 import './App.css'
@@ -163,10 +163,12 @@ function DiscreteTab({ result, dist }) {
 function NormalHistCard({ result }) {
   if (!result) return null
 
+  // Часть 2: подпись оси зависит от заданных μ и σ²
+  const label = `N(${fmt(result.theoMean, 2)}, ${fmt(result.theoVar, 2)})`
   const chartData = result.histogram.map(b => ({
-    x: b.mid.toFixed(1),
+    x: b.mid.toFixed(2),
     'Эмп. плотность': parseFloat(b.freq.toFixed(4)),
-    'N(0,1)': parseFloat(b.dens.toFixed(4)),
+    [label]: parseFloat(b.dens.toFixed(4)),
   }))
 
   return (
@@ -179,6 +181,9 @@ function NormalHistCard({ result }) {
         <Group gap="md">
           <Text size="xs">x̄ = <Code>{fmt(result.empMean, 4)}</Code></Text>
           <Text size="xs">σ̂ = <Code>{fmt(result.empStdDev, 4)}</Code></Text>
+          {/* Часть 2: теоретические параметры из ответа сервера */}
+          <Text size="xs" c="dimmed">μ = <Code>{fmt(result.theoMean, 2)}</Code></Text>
+          <Text size="xs" c="dimmed">σ² = <Code>{fmt(result.theoVar, 2)}</Code></Text>
         </Group>
         <CompositeChart
           h={260}
@@ -186,14 +191,14 @@ function NormalHistCard({ result }) {
           dataKey="x"
           series={[
             { name: 'Эмп. плотность', type: 'bar',  color: 'blue.4' },
-            { name: 'N(0,1)',          type: 'line', color: 'red.6' },
+            { name: label,             type: 'line', color: 'red.6' },
           ]}
-          xAxisLabel="Z"
+          xAxisLabel="X"
           withLegend
           legendProps={{ verticalAlign: 'top', height: 30 }}
         />
         <Text size="xs" c="dimmed" ta="center">
-          Теория: E[Z]=0, D[Z]=1 | Эмпирика: {fmt(result.empMean, 3)}, {fmt(result.empStdDev*result.empStdDev, 3)}
+          Теория: E[X]={fmt(result.theoMean,3)}, D[X]={fmt(result.theoVar,3)} | Эмпирика: {fmt(result.empMean, 3)}, {fmt(result.empStdDev*result.empStdDev, 3)}
         </Text>
       </Stack>
     </Card>
@@ -206,12 +211,18 @@ export default function App() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  // Часть 2: параметры нормального распределения, задаваемые пользователем
+  const [normalMean, setNormalMean]     = useState(0)
+  const [normalVar,  setNormalVar]      = useState(1)
+  // ──────────────────────────────────────────────────────────────────────────
 
   const run = async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/simulate')
+      // Часть 2: передаём μ и σ² как query-параметры
+      const url = `/api/simulate?mean=${normalMean}&variance=${normalVar}`
+      const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
     } catch (e) {
@@ -346,13 +357,46 @@ export default function App() {
           )}
 
           {/* ─── Часть 2: Нормальная СВ ─────────── */}
+          {/* Часть 2: инпуты для задания μ (матожидание) и σ² (дисперсия) */}
+          <Card withBorder shadow="sm" radius="md" padding="lg" bg="teal.0">
+            <Stack gap="sm">
+              <Title order={3}>Часть 2 — Параметры нормального распределения N(μ, σ²)</Title>
+              <Text size="sm" c="dimmed">
+                Задайте матожидание μ и дисперсию σ² для генерации X = μ + σ·Z, где Z ~ N(0,1).
+              </Text>
+              <Group gap="md" align="flex-end">
+                <NumberInput
+                  label="Матожидание μ"
+                  description="E[X]"
+                  value={normalMean}
+                  onChange={v => setNormalMean(Number(v))}
+                  step={0.5}
+                  w={160}
+                />
+                <NumberInput
+                  label="Дисперсия σ²"
+                  description="D[X] > 0"
+                  value={normalVar}
+                  onChange={v => setNormalVar(Number(v))}
+                  min={0.01}
+                  step={0.5}
+                  w={160}
+                />
+                <Button onClick={run} loading={loading} variant="filled" color="teal">
+                  Применить
+                </Button>
+              </Group>
+            </Stack>
+          </Card>
+          {/* ──────────────────────────────────────────────────────────────── */}
+
           {data && (
             <Card withBorder shadow="sm" radius="md" padding="lg">
               <Stack gap="md">
-                <Title order={2}>Часть 2 — Нормальная случайная величина N(0,1)</Title>
+                <Title order={2}>Часть 2 — Нормальная случайная величина N({fmt(data.normalMean, 2)}, {fmt(data.normalVar, 2)})</Title>
                 <Text size="sm" c="dimmed">
-                  Метод Бокса–Мюллера: два U[0,1) → два N(0,1). Гистограмма сравнивается
-                  с теоретической плотностью φ(z) = e^(−z²/2) / √(2π).
+                  Метод Бокса–Мюллера: два U[0,1) → два N(0,1) → X = μ + σ·Z ~ N(μ, σ²).
+                  Гистограмма сравнивается с теоретической плотностью.
                 </Text>
 
                 <Grid gutter="md">
