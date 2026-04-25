@@ -23,9 +23,6 @@
 // Статистический критерий:
 //   χ² = Σ (t_i − T·π_i)² / (T·π_i), df = 2, α = 0.05
 //   t_i — время в состоянии i, T — общее время моделирования
-//
-// API:
-//   GET /api/simulate?l12=0.5&l13=0.2&l21=0.4&l23=0.3&l31=0.1&l32=0.5&days=60
 
 package main
 
@@ -47,7 +44,7 @@ var defaultRates = [3][3]float64{
 	{0.1, 0.5, 0}, // из «пасмурно»: λ31=0.1, λ32=0.5
 }
 
-const defaultDays = 60.0
+const defaultDays = 60
 
 // ─── Структуры данных ─────────────────────────────────────────────────────────
 
@@ -62,7 +59,7 @@ type Transition struct {
 // SimResponse — полный ответ API.
 type SimResponse struct {
 	Transitions   []Transition  `json:"transitions"`
-	TotalTime     float64       `json:"totalTime"`
+	TotalTime     int           `json:"totalTime"`
 	EmpPi         [3]float64    `json:"empPi"`         // эмпирическое стационарное (по времени)
 	TheoPi        [3]float64    `json:"theoPi"`        // теоретическое стационарное
 	TimeInState   [3]float64    `json:"timeInState"`   // суммарное время в каждом состоянии
@@ -254,7 +251,7 @@ func simulate(rng *rand.Rand, rates [3][3]float64, totalDays float64) SimRespons
 
 	return SimResponse{
 		Transitions:   transitions,
-		TotalTime:     totalDays,
+		TotalTime:     int(totalDays),
 		EmpPi:         empPi,
 		TheoPi:        theoPi,
 		TimeInState:   timeInState,
@@ -298,13 +295,13 @@ func handleSimulate(w http.ResponseWriter, r *http.Request) {
 
 	days := defaultDays
 	if v := q.Get("days"); v != "" {
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil && parsed > 0 && parsed <= 3650 {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 3650 {
 			days = parsed
 		}
 	}
 
 	rng := rand.New(rand.NewSource(42))
-	result := simulate(rng, rates, days)
+	result := simulate(rng, rates, float64(days))
 
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		log.Printf("encode error: %v", err)

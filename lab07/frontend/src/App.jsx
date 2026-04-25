@@ -157,7 +157,7 @@ function AnimationSection({ data }) {
                 label={v => `${transitions[v]?.enterTime?.toFixed(1) ?? ''} дн.`}
                 marks={[
                   { value: 0,          label: '0' },
-                  { value: Math.floor(total / 2), label: `${(data.totalTime / 2).toFixed(0)}д` },
+                  { value: Math.floor(total / 2), label: `${Math.floor(data.totalTime / 2)}д` },
                   { value: total - 1,  label: `${data.totalTime}д` },
                 ]}
                 mb="md"
@@ -418,7 +418,7 @@ function StatsSection({ data }) {
               <Table.Tr>
                 <Table.Td fw={600}>Итого</Table.Td>
                 <Table.Td fw={600}>{data.visitsToState.reduce((a, b) => a + b, 0)}</Table.Td>
-                <Table.Td fw={600}>{fmt(data.totalTime, 1)}</Table.Td>
+                <Table.Td fw={600}>{data.totalTime}</Table.Td>
                 <Table.Td fw={600}>100%</Table.Td>
                 <Table.Td colSpan={2} />
               </Table.Tr>
