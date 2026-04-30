@@ -24,7 +24,7 @@ function App() {
     alpha: 9.7e-5,
   });
 
-  // начение alpha как строка — чтобы поле ввода не «схлопывало» экспоненциальный формат
+  // Значение alpha как строка — чтобы поле ввода не «схлопывало» экспоненциальный формат
   const [alphaStr, setAlphaStr] = useState('9.7e-5');
 
   const [results, setResults] = useState([]);
@@ -36,10 +36,10 @@ function App() {
   const wsRef = useRef(null);
 
   const materialInfo = {
-    name: 'люминий',
-    k:    '237 т/(м·)',
+    name: 'Алюминий',
+    k:    '237 Вт/(м·К)',
     rho:  '2 700 кг/м³',
-    c:    '900 ж/(кг·)',
+    c:    '900 Дж/(кг·К)',
     alpha: '9.7×10⁻⁵ м²/с',
   };
 
@@ -47,14 +47,14 @@ function App() {
     return () => { wsRef.current?.close(); };
   }, []);
 
-  // араметр уранта для текущих настроек (вычисляется в реальном времени)
+  // Параметр Куранта для текущих настроек (вычисляется в реальном времени)
   const rCourant = params.alpha * params.timeStep / (params.spaceStep * params.spaceStep);
 
   const connectWebSocket = () =>
     new Promise((resolve, reject) => {
       const ws = new WebSocket('ws://localhost:8080/ws');
       ws.onopen  = () => { setIsConnected(true); wsRef.current = ws; resolve(ws); };
-      ws.onerror = (e) => { setError('шибка подключения к серверу. бедитесь, что backend запущен.'); reject(e); };
+      ws.onerror = (e) => { setError('Ошибка подключения к серверу. Убедитесь, что backend запущен.'); reject(e); };
       ws.onclose = () => { setIsConnected(false); wsRef.current = null; };
     });
 
@@ -82,7 +82,7 @@ function App() {
       ws.send(JSON.stringify(params));
       setTimeout(() => setIsRunning(false), 1500);
     } catch (err) {
-      setError('е удалось запустить симуляцию: ' + err.message);
+      setError('Не удалось запустить симуляцию: ' + err.message);
       setIsRunning(false);
     }
   };
@@ -122,12 +122,12 @@ function App() {
   };
   const { min: minTemp, max: maxTemp } = getMinMaxTemp();
 
-  // ыводы по лабораторной работе
+  // Выводы по лабораторной работе
   const conclusions = lastResult ? (() => {
     const fo        = lastResult.fourierNum ?? 0;
     const rVal      = lastResult.r ?? rCourant;
     const dTcenter  = lastResult.centerTemp - (firstResult?.centerTemp ?? params.initialTemp);
-    const k = 237; // т/(м·) для алюминия
+    const k = 237; // Вт/(м·К) для алюминия
     const qLeft  = -k * (lastResult.leftFlux  ?? 0);
     const qRight = -k * (lastResult.rightFlux ?? 0);
     return { fo, rVal, dTcenter, qLeft, qRight };
@@ -136,67 +136,67 @@ function App() {
   return (
     <div className="app-container">
       <div className="app-header">
-        <h1>🔥 оделирование теплопроводности</h1>
-        <p>етод конечных разностей — явная схема для уравнения параболического типа</p>
+        <h1>🔥 Моделирование теплопроводности</h1>
+        <p>Метод конечных разностей — явная схема для уравнения параболического типа</p>
       </div>
 
-      {/* ─── лок физики ─── */}
+      {/* ─── Блок физики ─── */}
       <div className="physics-block">
         <button className="physics-toggle" onClick={() => setShowPhysics(v => !v)}>
-          📚 изическая модель {showPhysics ? '▲' : '▼'}
+          📚 Физическая модель {showPhysics ? '▲' : '▼'}
         </button>
 
         {showPhysics && (
           <div className="physics-body">
             <div className="physics-columns">
               <div className="physics-col">
-                <h4>равнение теплопроводности</h4>
+                <h4>Уравнение теплопроводности</h4>
                 <div className="formula">∂T/∂t = α · ∂²T/∂x²</div>
                 <p>
-                  писывает распространение тепла вдоль одномерной пластины.
-                  равая часть — дивергенция теплового потока.
+                  Описывает распространение тепла вдоль одномерной пластины.
+                  Правая часть — дивергенция теплового потока.
                   <em> T(x,t)</em> — поле температур, зависящее от координаты и времени.
                 </p>
 
-                <h4>оэффициент температуропроводности</h4>
+                <h4>Коэффициент температуропроводности</h4>
                 <div className="formula">α = k / (ρ · c)</div>
                 <p>
-                  <strong>k</strong> — теплопроводность (т/(м·));<br/>
+                  <strong>k</strong> — теплопроводность (Вт/(м·К));<br/>
                   <strong>ρ</strong> — плотность (кг/м³);<br/>
-                  <strong>c</strong> — удельная теплоёмкость (ж/(кг·)).<br/>
-                  ем больше α, тем быстрее выравнивается температурное поле.
+                  <strong>c</strong> — удельная теплоёмкость (Дж/(кг·К)).<br/>
+                  Чем больше α, тем быстрее выравнивается температурное поле.
                 </p>
               </div>
 
               <div className="physics-col">
-                <h4>исленная схема (явная )</h4>
+                <h4>Численная схема (явная МКР)</h4>
                 <div className="formula small">
                   Tᵢⁿ⁺¹ = Tᵢⁿ + r·(Tᵢ₊₁ⁿ − 2·Tᵢⁿ + Tᵢ₋₁ⁿ)
                 </div>
                 <p>
-                  аждый узел <em>i</em> на шаге <em>n+1</em> пересчитывается по трём соседям с шага <em>n</em>.
-                  раничные условия ирихле: температура на торцах зафиксирована.
+                  Каждый узел <em>i</em> на шаге <em>n+1</em> пересчитывается по трём соседям с шага <em>n</em>.
+                  Граничные условия Дирихле: температура на торцах зафиксирована.
                 </p>
 
-                <h4>словие устойчивости ()</h4>
+                <h4>Условие устойчивости (КФЛ)</h4>
                 <div className="formula">r = α·Δt / Δx² ≤ 0.5</div>
                 <p>
-                  ри нарушении — ошибки накапливаются, решение «взрывается».
-                  <em> r</em> — критерий уранта–ридрихса–еви.
+                  При нарушении — ошибки накапливаются, решение «взрывается».
+                  <em> r</em> — критерий Куранта–Фридрихса–Леви.
                 </p>
 
-                <h4>исло урье</h4>
+                <h4>Число Фурье</h4>
                 <div className="formula">Fo = α·t / L²</div>
                 <p>
-                  езразмерное время диффузии тепла. ри Fo ≈ 0.1 тепловой фронт
+                  Безразмерное время диффузии тепла. При Fo ≈ 0.1 тепловой фронт
                   достигает центра; при Fo ≫ 1 — профиль T(x) близок к установившемуся (линейному).
                 </p>
               </div>
             </div>
 
-            {/* инамическое уравнение с текущими числами */}
+            {/* Динамическое уравнение с текущими числами */}
             <div className="formula-live">
-              <strong>ормула с текущими числами:</strong>&emsp;
+              <strong>Формула с текущими числами:</strong>&emsp;
               Tᵢⁿ⁺¹ = Tᵢⁿ + <span className={rCourant > 0.5 ? 'r-bad' : 'r-ok'}>
                 {fmtSci(rCourant, 6)}
               </span> · (Tᵢ₊₁ⁿ − 2Tᵢⁿ + Tᵢ₋₁ⁿ)
@@ -205,7 +205,7 @@ function App() {
                 {fmtSci(rCourant, 6)}
               </span>
               {rCourant > 0.5
-                ? ' ⚠️ СТЬ — уменьшите Δt или увеличьте Δx'
+                ? ' ⚠️ НЕСТАБИЛЬНО — уменьшите Δt или увеличьте Δx'
                 : ' ✓ устойчиво'}
             </div>
           </div>

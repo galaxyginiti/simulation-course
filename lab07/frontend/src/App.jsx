@@ -525,6 +525,103 @@ function MatrixSection({ data }) {
   )
 }
 
+// ─── Утилита: экспорт в CSV ───────────────────────────────────────────────────
+
+function exportCSV(data) {
+  const rows = []
+
+  // 1. Сводка эксперимента
+  rows.push(['=== СВОДКА ЭКСПЕРИМЕНТА ==='])
+  rows.push(['Горизонт (дни)', data.totalTime])
+  rows.push(['χ²', data.chi2.toFixed(6)])
+  rows.push(['χ²крит (df=2, α=0.05)', data.chi2Crit.toFixed(6)])
+  rows.push(['Результат теста', data.chi2Pass ? 'H₀ не отвергается' : 'H₀ отвергается'])
+  rows.push([])
+
+  // 2. Стационарное распределение
+  rows.push(['=== СТАЦИОНАРНОЕ РАСПРЕДЕЛЕНИЕ ==='])
+  rows.push(['Состояние', 'Теор. πᵢ', 'Эмп. π̂ᵢ', '|π̂ᵢ − πᵢ|', 'E_i = T·πᵢ (дн.)', 'O_i (дн.)'])
+  STATES.forEach((s, i) => {
+    rows.push([
+      s.name,
+      data.theoPi[i].toFixed(6),
+      data.empPi[i].toFixed(6),
+      Math.abs(data.empPi[i] - data.theoPi[i]).toFixed(6),
+      (data.theoPi[i] * data.totalTime).toFixed(4),
+      data.timeInState[i].toFixed(4),
+    ])
+  })
+  rows.push([])
+
+  // 3. Статистика по состояниям
+  rows.push(['=== СТАТИСТИКА ПО СОСТОЯНИЯМ ==='])
+  rows.push(['Состояние', 'Визитов', 'Время (дн.)', 'Доля времени', 'Ср. длит. эмп. (дн.)', 'Ср. длит. теор. 1/|Q_ii| (дн.)'])
+  STATES.forEach((s, i) => {
+    rows.push([
+      s.name,
+      data.visitsToState[i],
+      data.timeInState[i].toFixed(4),
+      data.empPi[i].toFixed(6),
+      data.avgDuration[i].toFixed(4),
+      data.theoAvgDur[i].toFixed(4),
+    ])
+  })
+  rows.push([])
+
+  // 4. Матрица-генератор Q
+  rows.push(['=== МАТРИЦА-ГЕНЕРАТОР Q ==='])
+  rows.push(['Q', ...STATES.map(s => s.name)])
+  STATES.forEach((rs, i) => {
+    rows.push([rs.name, ...STATES.map((_, j) => data.generator[i][j].toFixed(4))])
+  })
+  rows.push([])
+
+  // 5. Интенсивности λᵢⱼ
+  rows.push(['=== ИНТЕНСИВНОСТИ λᵢⱼ ==='])
+  rows.push(['λᵢⱼ', ...STATES.map(s => s.name), '|Q_ii|'])
+  STATES.forEach((rs, i) => {
+    rows.push([
+      rs.name,
+      ...STATES.map((_, j) => (i === j ? '' : data.rates[i][j].toFixed(4))),
+      Math.abs(data.generator[i][i]).toFixed(4),
+    ])
+  })
+  rows.push([])
+
+  // 6. Переходы (траектория)
+  rows.push(['=== ПЕРЕХОДЫ (ТРАЕКТОРИЯ) ==='])
+  rows.push(['#', 'Состояние', 'Название', 'Вход (дн.)', 'Выход (дн.)', 'Длительность (дн.)'])
+  data.transitions.forEach((tr, idx) => {
+    rows.push([
+      idx + 1,
+      tr.state,
+      STATES[tr.state - 1].name,
+      tr.enterTime.toFixed(6),
+      tr.exitTime.toFixed(6),
+      tr.duration.toFixed(6),
+    ])
+  })
+
+  // Сборка CSV строки (разделитель ; для совместимости с Excel)
+  const csv = rows
+    .map(row => row.map(cell => {
+      const s = String(cell)
+      return s.includes(';') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s
+    }).join(';'))
+    .join('\r\n')
+
+  const bom = '\uFEFF' // BOM для корректного отображения кириллицы в Excel
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `markov_weather_T${data.totalTime}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ─── Главный компонент ────────────────────────────────────────────────────────
 
 const DEFAULT_RATES = { l12: 0.5, l13: 0.2, l21: 0.4, l23: 0.3, l31: 0.1, l32: 0.5 }
@@ -671,6 +768,17 @@ export default function App() {
                   }
                 </Text>
               </Paper>
+
+              {/* Экспорт CSV */}
+              <Group justify="flex-end">
+                <Button
+                  variant="outline"
+                  color="teal"
+                  onClick={() => exportCSV(data)}
+                >
+                  ⬇ Экспорт CSV
+                </Button>
+              </Group>
 
               {/* Анимация */}
               <AnimationSection data={data} />
