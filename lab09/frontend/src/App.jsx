@@ -23,12 +23,12 @@ const fmt = (v, d = 4) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) :
 
 function ParamPanel({ params, setParams, onRun, loading }) {
   const rho = params.mu > 0 ? params.lambda / params.mu : Infinity
-  const stable = rho < 1
+  const stable = false // M/M/1/1 всегда устойчива, очереди нет
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={3}>Параметры M/M/1</Title>
+        <Title order={3}>Параметры M/M/1/1</Title>
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <NumberInput
@@ -65,16 +65,16 @@ function ParamPanel({ params, setParams, onRun, loading }) {
           </Button>
           <Badge
             size="lg"
-            color={stable ? 'green' : 'red'}
-            variant={stable ? 'outline' : 'filled'}
+            color="blue"
+            variant="outline"
           >
-            ρ = λ/μ = {fmt(rho, 3)} {stable ? '< 1 ✓' : '≥ 1 — система неустойчива!'}
+            ρ = λ/μ = {fmt(rho, 3)} | P₀ = {fmt(1/(1+rho), 3)} | P₁ = {fmt(rho/(1+rho), 3)}
           </Badge>
         </Group>
 
         {!stable && (
-          <Alert color="red" title="Система M/M/1 неустойчива">
-            При ρ ≥ 1 очередь растёт неограниченно. Увеличьте μ или уменьшите λ.
+          <Alert color="blue" title="Система M/M/1/1 всегда устойчива">
+            Очереди нет — заявка либо попадает на обслуживание, либо получает отказ. Система устойчива при любом ρ.
           </Alert>
         )}
       </Stack>
@@ -96,8 +96,8 @@ function ProbDistSection({ data }) {
       <Stack gap="sm">
         <Title order={3}>Стационарное распределение P(N = k)</Title>
         <Text size="sm" c="dimmed">
-          Вероятность того, что в системе находится ровно k заявок.
-          Теор. P(N = k) = (1 − ρ) · ρᵏ, ρ = {fmt(data.rho, 3)}, P₀ = {fmt(data.theoP0, 3)}.
+          Вероятность того, что прибор свободен (k=0) или занят (k=1).
+          Теор. P₀ = 1/(1+ρ) = {fmt(data.theoP0, 3)}, P₁ = ρ/(1+ρ) = {fmt(data.theoP1, 3)}.
         </Text>
         <BarChart
           h={300}
@@ -122,42 +122,38 @@ function ProbDistSection({ data }) {
 
 function StatsSection({ data }) {
   const rows = [
-    { label: 'L — среднее в системе',     theo: data.theoL,   emp: data.empL },
-    { label: 'Lq — среднее в очереди',    theo: data.theoLq,  emp: data.empLq },
-    { label: 'W — среднее время (сист.)', theo: data.theoW,   emp: data.empW },
-    { label: 'Wq — среднее ожидание',     theo: data.theoWq,  emp: data.empWq },
-    { label: 'ρ — загрузка сервера',      theo: data.rho,     emp: data.empUtilization },
-    { label: 'P₀ — вероятность простоя',  theo: data.theoP0,  emp: 1 - data.empUtilization },
+    { label: 'L — среднее в системе',         theo: data.theoL,    emp: data.empL },
+    { label: 'W — среднее время обслуживания', theo: data.theoW,    emp: data.empW },
+    { label: 'ρ — загрузка прибора = P₁',      theo: data.theoP1,   emp: data.empUtilization },
+    { label: 'P₀ — вероятность простоя',    theo: data.theoP0,   emp: 1 - data.empUtilization },
+    { label: 'Pотк — вероятность отказа',   theo: data.theoP1,   emp: data.empLossProb },
   ]
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={3}>Теория vs Эксперимент (M/M/1)</Title>
+        <Title order={3}>Теория vs Эксперимент (M/M/1/1)</Title>
 
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Обслужено заявок</Text>
-              <Title order={2} c="blue">{data.totalCustomers.toLocaleString()}</Title>
+              <Text size="xs" c="dimmed">Поступило</Text>
+              <Title order={2} c="gray">{data.totalArrived.toLocaleString()}</Title>
+              <Text size="xs" c="dimmed">заявок</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 4 }}>
+            <Paper withBorder p="md" radius="md" ta="center">
+              <Text size="xs" c="dimmed">Обслужено</Text>
+              <Title order={2} c="green">{data.totalServed.toLocaleString()}</Title>
               <Text size="xs" c="dimmed">за T = {data.totalTime}</Text>
             </Paper>
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Коэф. загрузки ρ</Text>
-              <Title order={2} c={data.rho < 0.8 ? 'green' : data.rho < 1 ? 'yellow' : 'red'}>
-                {fmt(data.rho, 3)}
-              </Title>
-              <Text size="xs" c="dimmed">λ/μ = {data.lambda}/{data.mu}</Text>
-            </Paper>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 4 }}>
-            <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Устойчивость</Text>
-              <Badge size="xl" color={data.stable ? 'green' : 'red'} mt="xs">
-                {data.stable ? 'Устойчива (ρ < 1)' : 'Неустойчива (ρ ≥ 1)'}
-              </Badge>
+              <Text size="xs" c="dimmed">Отказано</Text>
+              <Title order={2} c="red">{data.totalRejected.toLocaleString()}</Title>
+              <Text size="xs" c="dimmed">{(data.empLossProb * 100).toFixed(1)}% от поступивших</Text>
             </Paper>
           </Grid.Col>
         </Grid>
@@ -167,7 +163,7 @@ function StatsSection({ data }) {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Характеристика</Table.Th>
-                <Table.Th>Теория M/M/1</Table.Th>
+                <Table.Th>Теория M/M/1/1</Table.Th>
                 <Table.Th>Эксперимент</Table.Th>
                 <Table.Th>|Δ| абс.</Table.Th>
                 <Table.Th>Относит. погрешн.</Table.Th>
@@ -198,15 +194,15 @@ function StatsSection({ data }) {
           </Table>
         </ScrollArea>
 
-        <Divider label="Формулы M/M/1" labelPosition="center" />
+        <Divider label="Формулы M/M/1/1" labelPosition="center" />
         <Paper withBorder p="md" radius="md" bg="gray.0">
           <Code block fz={12}>{[
             `ρ  = λ/μ = ${data.lambda}/${data.mu} = ${fmt(data.rho, 4)}`,
-            `P₀ = 1 − ρ = ${fmt(data.theoP0, 4)}`,
-            `L  = ρ/(1−ρ) = ${fmt(data.theoL, 4)}`,
-            `Lq = ρ²/(1−ρ) = ${fmt(data.theoLq, 4)}`,
-            `W  = 1/(μ−λ) = 1/${data.mu - data.lambda} = ${fmt(data.theoW, 4)}`,
-            `Wq = ρ/(μ−λ) = ${fmt(data.theoWq, 4)}`,
+            `P₀ = 1/(1+ρ) = ${fmt(data.theoP0, 4)}  (вероятность простоя)`,
+            `P₁ = ρ/(1+ρ) = ${fmt(data.theoP1, 4)}  (вероятность отказа = загрузка)`,
+            `L  = P₁ = ${fmt(data.theoL, 4)}`,
+            `W  = 1/μ = 1/${data.mu} = ${fmt(data.theoW, 4)}`,
+            `λеф = λ·P₀ = ${fmt(data.theoLambdaEf, 4)}  (эффективная интенсивность)`,
           ].join('\n')}</Code>
         </Paper>
       </Stack>
@@ -242,10 +238,9 @@ export default function App() {
       <Container size="xl" py="xl">
         <Stack gap="lg">
           <div>
-            <Title order={1}>Лаб. №9 — Система M/M/1</Title>
+            <Title order={1}>Лаб. №9 — Система M/M/1/1</Title>
             <Text c="dimmed" size="sm">
-              Одноканальная система с пуассоновским входным потоком и экспоненциальным
-              временем обслуживания. Event-driven симуляция с min-heap очередью событий.
+              Одноканальная система без очереди: если прибор занят — отказ. Event-driven симуляция с min-heap очередью событий.
             </Text>
           </div>
 
