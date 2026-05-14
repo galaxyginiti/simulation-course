@@ -42,7 +42,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="λ — интенсивность потока"
               value={params.lambda}
-              onChange={v => setParams(p => ({ ...p, lambda: v || 0.1 }))}
+              onChange={v => setParams(p => ({ ...p, lambda: v }))}
               min={0.1} max={200} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -50,7 +50,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="μ — интенсивность обслуживания (прибор)"
               value={params.mu}
-              onChange={v => setParams(p => ({ ...p, mu: v || 0.1 }))}
+              onChange={v => setParams(p => ({ ...p, mu: v }))}
               min={0.1} max={200} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -58,7 +58,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="c — число приборов"
               value={params.c}
-              onChange={v => setParams(p => ({ ...p, c: v || 1 }))}
+              onChange={v => setParams(p => ({ ...p, c: v }))}
               min={1} max={50} step={1}
             />
           </Grid.Col>
@@ -87,7 +87,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="T — время моделирования"
               value={params.t}
-              onChange={v => setParams(p => ({ ...p, t: v || 100 }))}
+              onChange={v => setParams(p => ({ ...p, t: v }))}
               min={100} max={1000000} step={500}
             />
           </Grid.Col>
@@ -419,12 +419,12 @@ export default function App() {
     setError(null)
     try {
       const qs = new URLSearchParams({
-        lambda: params.lambda,
-        mu: params.mu,
-        c: params.c,
-        k: params.k,
-        alpha: params.alpha,
-        t: params.t,
+        lambda: params.lambda ?? 4,
+        mu: params.mu ?? 2,
+        c: params.c ?? 3,
+        k: params.k ?? 0,
+        alpha: params.alpha ?? 0,
+        t: params.t ?? 1000,
       })
       const res = await fetch(`/api/simulate?${qs}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)

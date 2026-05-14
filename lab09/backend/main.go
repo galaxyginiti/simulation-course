@@ -76,10 +76,16 @@ func (h *EventHeap) Pop() interface{} {
 
 // ─── Структуры данных ─────────────────────────────────────────────────────────
 
-type QueuePoint struct {
-	Time   float64 `json:"time"`
-	QLen   int     `json:"qLen"`   // в очереди (без обслуживаемого)
-	NInSys int     `json:"nInSys"` // всего в системе
+// type QueuePoint struct {
+// 	Time   float64 `json:"time"`
+// 	QLen   int     `json:"qLen"`   // в очереди (без обслуживаемого)
+// 	NInSys int     `json:"nInSys"` // всего в системе
+// }
+
+type ProbPoint struct {
+	N    int     `json:"n"`
+	Emp  float64 `json:"emp"`
+	Theo float64 `json:"theo"`
 }
 
 type WaitBin struct {
@@ -90,8 +96,11 @@ type WaitBin struct {
 }
 
 type SimResponse struct {
-	// Динамика очереди (для графика)
-	QueueOverTime []QueuePoint `json:"queueOverTime"`
+	// // Динамика очереди (для графика)
+	// QueueOverTime []QueuePoint `json:"queueOverTime"`
+
+	// Распределение вероятностей P(N=k)
+	ProbDist []ProbPoint `json:"probDist"`
 
 	// Гистограммы
 	WaitHistogram    []WaitBin `json:"waitHistogram"`
@@ -193,20 +202,21 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 	arrivalTime := map[int]float64{}
 	serviceStart := map[int]float64{}
 
-	var queuePoints []QueuePoint
+	// var queuePoints []QueuePoint
 	var waitTimes []float64
 	var sojournTimes []float64
+	stateTime := map[int]float64{}
 
 	// Интегрирование для L, Lq, загрузки
 	var areaInSys, areaInQueue, areaServerBusy float64
 	prevTime := 0.0
 	nInSys := 0
 
-	sampleEvery := totalTime / 2000.0
-	if sampleEvery < 0.01 {
-		sampleEvery = 0.01
-	}
-	lastSample := 0.0
+	// sampleEvery := totalTime / 2000.0
+	// if sampleEvery < 0.01 {
+	// 	sampleEvery = 0.01
+	// }
+	// lastSample := 0.0
 
 	for eh.Len() > 0 {
 		evt := heap.Pop(eh).(*Event)
@@ -218,6 +228,7 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 		// Накапливаем площади
 		dt := t - prevTime
 		areaInSys += float64(nInSys) * dt
+		stateTime[nInSys] += dt
 		qLenNow := nInSys - 1
 		if serverFree {
 			qLenNow = nInSys
@@ -231,15 +242,15 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 		}
 		prevTime = t
 
-		// Сохраняем точку для графика
-		if t >= lastSample {
-			queuePoints = append(queuePoints, QueuePoint{
-				Time:   t,
-				QLen:   qLenNow,
-				NInSys: nInSys,
-			})
-			lastSample = t + sampleEvery
-		}
+		// // Сохраняем точку для графика
+		// if t >= lastSample {
+		// 	queuePoints = append(queuePoints, QueuePoint{
+		// 		Time:   t,
+		// 		QLen:   qLenNow,
+		// 		NInSys: nInSys,
+		// 	})
+		// 	lastSample = t + sampleEvery
+		// }
 
 		switch evt.Type {
 		case Arrival:
@@ -296,6 +307,7 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 	// Финальная интеграция
 	dt := totalTime - prevTime
 	areaInSys += float64(nInSys) * dt
+	stateTime[nInSys] += dt
 	qLenFinal := nInSys - 1
 	if serverFree {
 		qLenFinal = nInSys
@@ -335,19 +347,40 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 		theoWq = rho / (mu - lambda)
 	}
 
-	// Прореживаем очередь для отображения
-	displayQueue := queuePoints
-	if len(displayQueue) > 1000 {
-		step := len(displayQueue) / 1000
-		sampled := make([]QueuePoint, 0, 1000)
-		for i := 0; i < len(displayQueue); i += step {
-			sampled = append(sampled, displayQueue[i])
+	// // Прореживаем очередь для отображения
+	// displayQueue := queuePoints
+	// if len(displayQueue) > 1000 {
+	// 	step := len(displayQueue) / 1000
+	// 	sampled := make([]QueuePoint, 0, 1000)
+	// 	for i := 0; i < len(displayQueue); i += step {
+	// 		sampled = append(sampled, displayQueue[i])
+	// 	}
+	// 	displayQueue = sampled
+	// }
+
+	// Распределение вероятностей P(N=k)
+	maxN := 0
+	for n := range stateTime {
+		if n > maxN {
+			maxN = n
 		}
-		displayQueue = sampled
+	}
+	if maxN > 30 {
+		maxN = 30
+	}
+	probDist := make([]ProbPoint, maxN+1)
+	for i := 0; i <= maxN; i++ {
+		emp := stateTime[i] / totalTime
+		theo := 0.0
+		if stable {
+			theo = (1 - rho) * math.Pow(rho, float64(i))
+		}
+		probDist[i] = ProbPoint{N: i, Emp: emp, Theo: theo}
 	}
 
 	return SimResponse{
-		QueueOverTime:    displayQueue,
+		// QueueOverTime: displayQueue,
+		ProbDist:         probDist,
 		WaitHistogram:    buildHistogram(waitTimes, 25),
 		SojournHistogram: buildHistogram(sojournTimes, 25),
 		Lambda:           lambda,
