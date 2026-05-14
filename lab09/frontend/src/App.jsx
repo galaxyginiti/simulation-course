@@ -138,22 +138,22 @@ function StatsSection({ data }) {
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
               <Text size="xs" c="dimmed">Поступило</Text>
-              <Title order={2} c="gray">{data.totalArrived.toLocaleString()}</Title>
+              <Title order={2} c="gray">{(data.totalArrived ?? 0).toLocaleString()}</Title>
               <Text size="xs" c="dimmed">заявок</Text>
             </Paper>
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
               <Text size="xs" c="dimmed">Обслужено</Text>
-              <Title order={2} c="green">{data.totalServed.toLocaleString()}</Title>
+              <Title order={2} c="green">{(data.totalServed ?? 0).toLocaleString()}</Title>
               <Text size="xs" c="dimmed">за T = {data.totalTime}</Text>
             </Paper>
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
               <Text size="xs" c="dimmed">Отказано</Text>
-              <Title order={2} c="red">{data.totalRejected.toLocaleString()}</Title>
-              <Text size="xs" c="dimmed">{(data.empLossProb * 100).toFixed(1)}% от поступивших</Text>
+              <Title order={2} c="red">{(data.totalRejected ?? 0).toLocaleString()}</Title>
+              <Text size="xs" c="dimmed">{((data.empLossProb ?? 0) * 100).toFixed(1)}% от поступивших</Text>
             </Paper>
           </Grid.Col>
         </Grid>
