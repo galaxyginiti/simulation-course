@@ -103,8 +103,8 @@ type SimResponse struct {
 	ProbDist []ProbPoint `json:"probDist"`
 
 	// Гистограммы
-	WaitHistogram    []WaitBin `json:"waitHistogram"`
-	SojournHistogram []WaitBin `json:"sojournHistogram"`
+	// WaitHistogram    []WaitBin `json:"waitHistogram"`
+	// SojournHistogram []WaitBin `json:"sojournHistogram"`
 
 	// Параметры
 	Lambda    float64 `json:"lambda"`
@@ -123,12 +123,12 @@ type SimResponse struct {
 	EmpUtilization float64 `json:"empUtilization"` // загрузка сервера
 
 	// Теоретические характеристики M/M/1
-	TheoP0  float64 `json:"theoP0"`
-	TheoL   float64 `json:"theoL"`
-	TheoLq  float64 `json:"theoLq"`
-	TheoW   float64 `json:"theoW"`
-	TheoWq  float64 `json:"theoWq"`
-	Stable  bool    `json:"stable"` // ρ < 1?
+	TheoP0 float64 `json:"theoP0"`
+	TheoL  float64 `json:"theoL"`
+	TheoLq float64 `json:"theoLq"`
+	TheoW  float64 `json:"theoW"`
+	TheoWq float64 `json:"theoWq"`
+	Stable bool    `json:"stable"` // ρ < 1?
 }
 
 // ─── Экспоненциальная случайная величина ─────────────────────────────────────
@@ -380,9 +380,9 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 
 	return SimResponse{
 		// QueueOverTime: displayQueue,
-		ProbDist:         probDist,
-		WaitHistogram:    buildHistogram(waitTimes, 25),
-		SojournHistogram: buildHistogram(sojournTimes, 25),
+		ProbDist:  probDist,
+		// WaitHistogram:    buildHistogram(waitTimes, 25),
+		// SojournHistogram: buildHistogram(sojournTimes, 25),
 		Lambda:           lambda,
 		Mu:               mu,
 		Rho:              rho,

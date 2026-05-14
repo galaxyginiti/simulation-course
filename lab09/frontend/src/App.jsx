@@ -118,56 +118,6 @@ function ProbDistSection({ data }) {
   )
 }
 
-// ─── Гистограмма времени ожидания ────────────────────────────────────────────
-
-function WaitHistSection({ data }) {
-  const wData = (data.waitHistogram || []).map(b => ({
-    bin: `${fmt(b.lo, 2)}–${fmt(b.hi, 2)}`,
-    'Ожидание': parseFloat(b.freq.toFixed(4)),
-  }))
-  const sData = (data.sojournHistogram || []).map(b => ({
-    bin: `${fmt(b.lo, 2)}–${fmt(b.hi, 2)}`,
-    'В системе': parseFloat(b.freq.toFixed(4)),
-  }))
-
-  return (
-    <Card withBorder shadow="sm" radius="md" padding="lg">
-      <Stack gap="md">
-        <Title order={3}>Распределение времени</Title>
-        <Text size="sm" c="dimmed">
-          Гистограммы эмпирического времени ожидания Wq и пребывания W.
-          Теор.: Wq = {fmt(data.theoWq, 4)}, W = {fmt(data.theoW, 4)}.
-        </Text>
-
-        <Grid gutter="lg">
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <Text fw={600} size="sm" mb="xs">Время ожидания Wq</Text>
-            <BarChart
-              h={220}
-              data={wData}
-              dataKey="bin"
-              series={[{ name: 'Ожидание', color: 'blue.5' }]}
-              withTooltip
-              yAxisProps={{ tickCount: 5 }}
-            />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <Text fw={600} size="sm" mb="xs">Время пребывания W</Text>
-            <BarChart
-              h={220}
-              data={sData}
-              dataKey="bin"
-              series={[{ name: 'В системе', color: 'orange.5' }]}
-              withTooltip
-              yAxisProps={{ tickCount: 5 }}
-            />
-          </Grid.Col>
-        </Grid>
-      </Stack>
-    </Card>
-  )
-}
-
 // ─── Сравнение теории и практики ─────────────────────────────────────────────
 
 function StatsSection({ data }) {
@@ -317,16 +267,11 @@ export default function App() {
             <Tabs defaultValue="prob" keepMounted={false}>
               <Tabs.List>
                 <Tabs.Tab value="prob">Распределение вероятностей</Tabs.Tab>
-                <Tabs.Tab value="hist">Распределение времени</Tabs.Tab>
                 <Tabs.Tab value="stats">Статистика и теория</Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="prob" pt="md">
                 <ProbDistSection data={data} />
-              </Tabs.Panel>
-
-              <Tabs.Panel value="hist" pt="md">
-                <WaitHistSection data={data} />
               </Tabs.Panel>
 
               <Tabs.Panel value="stats" pt="md">
