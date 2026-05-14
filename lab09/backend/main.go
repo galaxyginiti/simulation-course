@@ -1,4 +1,4 @@
-// Лабораторная работа №9: Система массового обслуживания M/M/1/1
+// Лабораторная работа №9: Система массового обслуживания M/M/1
 //
 // Параметры:
 //   λ — интенсивность входного потока (заявки/ед. вр.)
@@ -286,23 +286,23 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 	}
 
 	return SimResponse{
-		ProbDist:     probDist,
-		Lambda:       lambda,
-		Mu:           mu,
-		Rho:          rho,
-		TotalTime:    totalTime,
-		TotalArrived: totalArrived,
-		TotalServed:  totalServed,
-		TotalRejected: totalRejected,
-		EmpL:          empL,
-		EmpW:          empW,
+		ProbDist:       probDist,
+		Lambda:         lambda,
+		Mu:             mu,
+		Rho:            rho,
+		TotalTime:      totalTime,
+		TotalArrived:   totalArrived,
+		TotalServed:    totalServed,
+		TotalRejected:  totalRejected,
+		EmpL:           empL,
+		EmpW:           empW,
 		EmpUtilization: empUtil,
-		EmpLossProb:   empLossProb,
-		TheoP0:        theoP0,
-		TheoP1:        theoP1,
-		TheoL:         theoL,
-		TheoW:         theoW,
-		TheoLambdaEf:  theoLambdaEf,
+		EmpLossProb:    empLossProb,
+		TheoP0:         theoP0,
+		TheoP1:         theoP1,
+		TheoL:          theoL,
+		TheoW:          theoW,
+		TheoLambdaEf:   theoLambdaEf,
 	}
 }
 

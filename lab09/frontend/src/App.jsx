@@ -23,12 +23,12 @@ const fmt = (v, d = 4) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) :
 
 function ParamPanel({ params, setParams, onRun, loading }) {
   const rho = params.mu > 0 ? params.lambda / params.mu : Infinity
-  const stable = false // M/M/1/1 всегда устойчива, очереди нет
+  const stable = false // M/M/1 всегда устойчива, очереди нет
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={3}>Параметры M/M/1/1</Title>
+        <Title order={3}>Параметры M/M/1</Title>
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <NumberInput
@@ -73,7 +73,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
         </Group>
 
         {!stable && (
-          <Alert color="blue" title="Система M/M/1/1 всегда устойчива">
+          <Alert color="blue" title="Система M/M/1 всегда устойчива">
             Очереди нет — заявка либо попадает на обслуживание, либо получает отказ. Система устойчива при любом ρ.
           </Alert>
         )}
@@ -132,7 +132,7 @@ function StatsSection({ data }) {
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={3}>Теория vs Эксперимент (M/M/1/1)</Title>
+        <Title order={3}>Теория vs Эксперимент (M/M/1)</Title>
 
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, sm: 4 }}>
@@ -163,7 +163,7 @@ function StatsSection({ data }) {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Характеристика</Table.Th>
-                <Table.Th>Теория M/M/1/1</Table.Th>
+                <Table.Th>Теория M/M/1</Table.Th>
                 <Table.Th>Эксперимент</Table.Th>
                 <Table.Th>|Δ| абс.</Table.Th>
                 <Table.Th>Относит. погрешн.</Table.Th>
@@ -194,7 +194,7 @@ function StatsSection({ data }) {
           </Table>
         </ScrollArea>
 
-        <Divider label="Формулы M/M/1/1" labelPosition="center" />
+        <Divider label="Формулы M/M/1" labelPosition="center" />
         <Paper withBorder p="md" radius="md" bg="gray.0">
           <Code block fz={12}>{[
             `ρ  = λ/μ = ${data.lambda}/${data.mu} = ${fmt(data.rho, 4)}`,
@@ -238,7 +238,7 @@ export default function App() {
       <Container size="xl" py="xl">
         <Stack gap="lg">
           <div>
-            <Title order={1}>Лаб. №9 — Система M/M/1/1</Title>
+            <Title order={1}>Лаб. №9 — Система M/M/1</Title>
             <Text c="dimmed" size="sm">
               Одноканальная система без очереди: если прибор занят — отказ. Event-driven симуляция с min-heap очередью событий.
             </Text>
