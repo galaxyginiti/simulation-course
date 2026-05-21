@@ -46,7 +46,15 @@ function ParamPanel({ params, setParams, onRun, loading }) {
               min={1} max={1000} step={1}
             />
           </Grid.Col>
-
+          <Grid.Col span={{ base: 12, sm: 4 }}>
+            <NumberInput
+              label="Число реализаций N"
+              description="Для построения распределения"
+              value={params.n}
+              onChange={v => setParams(p => ({ ...p, n: v || 100 }))}
+              min={100} max={50000} step={100}
+            />
+          </Grid.Col>
         </Grid>
 
         <Group>
@@ -149,7 +157,7 @@ function DistributionSection({ data }) {
       <Stack gap="md">
         <Title order={3}>Распределение числа заявок N(T)</Title>
         <Text size="sm" c="dimmed">
-          Синие столбцы — эмпирические частоты по {realizations} прогонам,
+          Гистограмма по {realizations} реализациям. Синие столбцы — эмпирические частоты,
           оранжевые — теоретические Poisson(λT).
         </Text>
 
@@ -310,7 +318,7 @@ function StatsSection({ data }) {
 // ─── Главный компонент ────────────────────────────────────────────────────────
 
 export default function App() {
-  const [params, setParams] = useState({ lambda: 5, t: 10 })
+  const [params, setParams] = useState({ lambda: 5, t: 10, n: 1000 })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -322,6 +330,7 @@ export default function App() {
       const qs = new URLSearchParams({
         lambda: params.lambda,
         t: params.t,
+        n: params.n,
       })
       const res = await fetch(`/api/simulate?${qs}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)

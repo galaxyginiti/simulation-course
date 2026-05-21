@@ -117,15 +117,6 @@ type SimResponse struct {
 	EmpW              float64 `json:"empW"`
 	EmpWq             float64 `json:"empWq"`
 	EmpUtilization    float64 `json:"empUtilization"` // доля занятости 1 прибора
-
-	// Теория M/M/c (без K, без нетерпения)
-	TheoErlangB float64 `json:"theoErlangB"` // Erlang-B loss
-	TheoErlangC float64 `json:"theoErlangC"` // Erlang-C delay
-	TheoLq      float64 `json:"theoLq"`
-	TheoWq      float64 `json:"theoWq"`
-	TheoW       float64 `json:"theoW"`
-	TheoL       float64 `json:"theoL"`
-	Stable      bool    `json:"stable"` // ρ < 1
 }
 
 // ─── Вспомогательные функции ──────────────────────────────────────────────────
@@ -136,47 +127,6 @@ func expRand(rng *rand.Rand, rate float64) float64 {
 		u = 1e-300
 	}
 	return -math.Log(u) / rate
-}
-
-func logFact(n int) float64 {
-	r := 0.0
-	for i := 2; i <= n; i++ {
-		r += math.Log(float64(i))
-	}
-	return r
-}
-
-// erlangB вычисляет вероятность потери Эрланга-B рекуррентным методом.
-// B(c, a): вероятность отказа в системе M/M/c/c, a = λ/μ.
-func erlangB(c int, a float64) float64 {
-	if a <= 0 {
-		return 0
-	}
-	b := 1.0
-	for i := 1; i <= c; i++ {
-		b = a * b / (float64(i) + a*b)
-	}
-	return b
-}
-
-// erlangC вычисляет вероятность ожидания Эрланга-C.
-// C(c, a): вероятность, что прибывшая заявка попадёт в очередь, a = λ/μ, ρ = a/c < 1.
-func erlangC(c int, lambda, mu float64) float64 {
-	a := lambda / mu
-	rho := a / float64(c)
-	if rho >= 1.0 {
-		return 1.0
-	}
-	// Числитель: (a^c / c!) / (1 − ρ)
-	logNum := float64(c)*math.Log(a) - logFact(c) - math.Log(1-rho)
-	num := math.Exp(logNum)
-	// Знаменатель: Σ_{k=0}^{c-1} a^k/k! + num
-	sum := 0.0
-	for k := 0; k < c; k++ {
-		logTerm := float64(k)*math.Log(a) - logFact(k)
-		sum += math.Exp(logTerm)
-	}
-	return num / (sum + num)
 }
 
 func buildWaitHist(values []float64, bins int) []WBin {
@@ -407,18 +357,6 @@ func simulate(rng *rand.Rand, lambda, mu float64, c, K int, alpha, totalTime flo
 		empAbanProb = float64(totalAbandoned) / float64(totalArrived)
 	}
 
-	// Теория M/M/c
-	eb := erlangB(c, a)
-	ec := erlangC(c, lambda, mu)
-	stable := rho < 1.0
-	theoLq, theoWq, theoW, theoL := 0.0, 0.0, 0.0, 0.0
-	if stable {
-		theoLq = ec * rho / (1 - rho)
-		theoWq = theoLq / lambda
-		theoW = theoWq + 1.0/mu
-		theoL = lambda * theoW
-	}
-
 	// Прореживаем
 	displayQueue := queuePoints
 	if len(displayQueue) > 1000 {
@@ -452,13 +390,6 @@ func simulate(rng *rand.Rand, lambda, mu float64, c, K int, alpha, totalTime flo
 		EmpW:             empW,
 		EmpWq:            empWq,
 		EmpUtilization:   empUtil,
-		TheoErlangB:      eb,
-		TheoErlangC:      ec,
-		TheoLq:           theoLq,
-		TheoWq:           theoWq,
-		TheoW:            theoW,
-		TheoL:            theoL,
-		Stable:           stable,
 	}
 }
 

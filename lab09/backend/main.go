@@ -3,7 +3,7 @@
 // Параметры:
 //   λ — интенсивность входного потока (заявки/ед. вр.)
 //   μ — интенсивность обслуживания (заявки/ед. вр.)
-//   ρ = λ/μ — предложенная нагрузка
+//   ρ = λ/μ — коэффициент загрузки (ρ < 1 необходимо для устойчивости)
 //
 // Алгоритм event-driven симуляции:
 //   Два типа событий: Arrival (поступление) и Departure (окончание обслуживания)
@@ -15,17 +15,17 @@
 //     Если сервер свободен → начало обслуживания:
 //       ✦ ТОЧКА ПСЕВДОСЛУЧАЙНОСТИ 2 ✦
 //       U₂ ~ U(0,1) → время обслуживания s = (−ln U₂)/μ ~ Exp(μ)
-//     Иначе → ОТКАЗ (ёмкость системы = 1, очереди нет).
+//     Иначе → заявка встаёт в очередь FCFS.
 //
 //   При Departure:
-//     Освобождение сервера.
+//     Освобождение сервера; если очередь непуста → обслуживаем следующую.
 //
-// Теоретические формулы M/M/1/1 (формула Эрланга-B при c=1):
-//   P₀  = 1 / (1 + ρ)       — вероятность простоя
-//   P₁  = ρ / (1 + ρ)       — вероятность занятости (= вероятность отказа)
-//   L   = P₁ = ρ/(1+ρ)      — среднее число заявок в системе
-//   W   = 1/μ               — среднее время обслуживания
-//   λ_ef = λ · P₀            — эффективная интенсивность
+// Теоретические формулы M/M/1 (ρ < 1):
+//   P₀  = 1 − ρ             — вероятность простоя
+//   L   = ρ / (1 − ρ)       — среднее число заявок в системе
+//   Lq  = ρ² / (1 − ρ)      — среднее число заявок в очереди
+//   W   = 1 / (μ − λ)       — среднее время пребывания в системе
+//   Wq  = ρ / (μ − λ)       — среднее время ожидания в очереди
 
 package main
 
@@ -76,16 +76,10 @@ func (h *EventHeap) Pop() interface{} {
 
 // ─── Структуры данных ─────────────────────────────────────────────────────────
 
-// type QueuePoint struct {
-// 	Time   float64 `json:"time"`
-// 	QLen   int     `json:"qLen"`   // в очереди (без обслуживаемого)
-// 	NInSys int     `json:"nInSys"` // всего в системе
-// }
-
-type ProbPoint struct {
-	N    int     `json:"n"`
-	Emp  float64 `json:"emp"`
-	Theo float64 `json:"theo"`
+type QueuePoint struct {
+	Time   float64 `json:"time"`
+	QLen   int     `json:"qLen"`   // в очереди (без обслуживаемого)
+	NInSys int     `json:"nInSys"` // всего в системе
 }
 
 type WaitBin struct {
@@ -96,32 +90,36 @@ type WaitBin struct {
 }
 
 type SimResponse struct {
-	// Распределение вероятностей P(N=k)
-	ProbDist []ProbPoint `json:"probDist"`
+	// Динамика очереди (для графика)
+	QueueOverTime []QueuePoint `json:"queueOverTime"`
+
+	// Гистограммы
+	WaitHistogram    []WaitBin `json:"waitHistogram"`
+	SojournHistogram []WaitBin `json:"sojournHistogram"`
 
 	// Параметры
 	Lambda    float64 `json:"lambda"`
 	Mu        float64 `json:"mu"`
-	Rho       float64 `json:"rho"` // ρ = λ/μ
+	Rho       float64 `json:"rho"`
 	TotalTime float64 `json:"totalTime"`
 
 	// Счётчики
-	TotalArrived  int `json:"totalArrived"`
-	TotalServed   int `json:"totalServed"`
-	TotalRejected int `json:"totalRejected"`
+	TotalCustomers int `json:"totalCustomers"`
 
 	// Эмпирические характеристики
 	EmpL           float64 `json:"empL"`           // среднее в системе
-	EmpW           float64 `json:"empW"`           // среднее время обслуживания
-	EmpUtilization float64 `json:"empUtilization"` // загрузка сервера = P₁
-	EmpLossProb    float64 `json:"empLossProb"`    // вероятность отказа
+	EmpLq          float64 `json:"empLq"`          // среднее в очереди
+	EmpW           float64 `json:"empW"`           // среднее время в системе
+	EmpWq          float64 `json:"empWq"`          // среднее время ожидания
+	EmpUtilization float64 `json:"empUtilization"` // загрузка сервера
 
-	// Теоретические характеристики M/M/1/1
-	TheoP0       float64 `json:"theoP0"`
-	TheoP1       float64 `json:"theoP1"`
-	TheoL        float64 `json:"theoL"`
-	TheoW        float64 `json:"theoW"`
-	TheoLambdaEf float64 `json:"theoLambdaEf"` // эффективная интенсивность
+	// Теоретические характеристики M/M/1
+	TheoP0  float64 `json:"theoP0"`
+	TheoL   float64 `json:"theoL"`
+	TheoLq  float64 `json:"theoLq"`
+	TheoW   float64 `json:"theoW"`
+	TheoWq  float64 `json:"theoWq"`
+	Stable  bool    `json:"stable"` // ρ < 1?
 }
 
 // ─── Экспоненциальная случайная величина ─────────────────────────────────────
@@ -173,7 +171,7 @@ func buildHistogram(values []float64, bins int) []WaitBin {
 	return hist
 }
 
-// ─── Симуляция M/M/1/1 ───────────────────────────────────────────────────────
+// ─── Симуляция M/M/1 ──────────────────────────────────────────────────────────
 
 func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 	rho := lambda / mu
@@ -190,15 +188,25 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 
 	customerID := 1
 	serverFree := true
+	var queue []int // CustomerID в очереди
 
-	stateTime := map[int]float64{}
+	arrivalTime := map[int]float64{}
+	serviceStart := map[int]float64{}
 
-	var areaInSys, areaServerBusy float64
+	var queuePoints []QueuePoint
+	var waitTimes []float64
+	var sojournTimes []float64
+
+	// Интегрирование для L, Lq, загрузки
+	var areaInSys, areaInQueue, areaServerBusy float64
 	prevTime := 0.0
 	nInSys := 0
-	totalArrived, totalServed, totalRejected := 0, 0, 0
 
-	var sumSvcTime float64
+	sampleEvery := totalTime / 2000.0
+	if sampleEvery < 0.01 {
+		sampleEvery = 0.01
+	}
+	lastSample := 0.0
 
 	for eh.Len() > 0 {
 		evt := heap.Pop(eh).(*Event)
@@ -210,30 +218,45 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 		// Накапливаем площади
 		dt := t - prevTime
 		areaInSys += float64(nInSys) * dt
-		stateTime[nInSys] += dt
+		qLenNow := nInSys - 1
+		if serverFree {
+			qLenNow = nInSys
+		}
+		if qLenNow < 0 {
+			qLenNow = 0
+		}
+		areaInQueue += float64(qLenNow) * dt
 		if !serverFree {
 			areaServerBusy += dt
 		}
 		prevTime = t
 
+		// Сохраняем точку для графика
+		if t >= lastSample {
+			queuePoints = append(queuePoints, QueuePoint{
+				Time:   t,
+				QLen:   qLenNow,
+				NInSys: nInSys,
+			})
+			lastSample = t + sampleEvery
+		}
+
 		switch evt.Type {
 		case Arrival:
-			totalArrived++
+			nInSys++
+			arrivalTime[evt.CustomerID] = t
 
 			if serverFree {
-				// Принимаем заявку
-				nInSys = 1
 				serverFree = false
+				serviceStart[evt.CustomerID] = t
 				svcTime := expRand(rng, mu)
-				sumSvcTime += svcTime
 				heap.Push(eh, &Event{
 					Time:       t + svcTime,
 					Type:       Departure,
 					CustomerID: evt.CustomerID,
 				})
 			} else {
-				// Отказ — прибор занят, очереди нет
-				totalRejected++
+				queue = append(queue, evt.CustomerID)
 			}
 
 			// Следующее поступление
@@ -245,64 +268,104 @@ func simulate(rng *rand.Rand, lambda, mu, totalTime float64) SimResponse {
 			})
 
 		case Departure:
-			nInSys = 0
-			serverFree = true
-			totalServed++
+			nInSys--
+			arrT := arrivalTime[evt.CustomerID]
+			svcStart := serviceStart[evt.CustomerID]
+			waitT := svcStart - arrT
+			sojournT := t - arrT
+			waitTimes = append(waitTimes, waitT)
+			sojournTimes = append(sojournTimes, sojournT)
+			delete(arrivalTime, evt.CustomerID)
+			delete(serviceStart, evt.CustomerID)
+
+			if len(queue) > 0 {
+				nextID := queue[0]
+				queue = queue[1:]
+				serviceStart[nextID] = t
+				heap.Push(eh, &Event{
+					Time:       t + expRand(rng, mu),
+					Type:       Departure,
+					CustomerID: nextID,
+				})
+			} else {
+				serverFree = true
+			}
 		}
 	}
 
 	// Финальная интеграция
 	dt := totalTime - prevTime
 	areaInSys += float64(nInSys) * dt
-	stateTime[nInSys] += dt
+	qLenFinal := nInSys - 1
+	if serverFree {
+		qLenFinal = nInSys
+	}
+	if qLenFinal < 0 {
+		qLenFinal = 0
+	}
+	areaInQueue += float64(qLenFinal) * dt
 	if !serverFree {
 		areaServerBusy += dt
 	}
 
 	empL := areaInSys / totalTime
+	empLq := areaInQueue / totalTime
 	empUtil := areaServerBusy / totalTime
 
-	empW := 0.0
-	if totalServed > 0 {
-		empW = sumSvcTime / float64(totalServed)
+	n := float64(len(waitTimes))
+	empWq, empW := 0.0, 0.0
+	if n > 0 {
+		sumWq, sumW := 0.0, 0.0
+		for i, w := range waitTimes {
+			sumWq += w
+			sumW += sojournTimes[i]
+		}
+		empWq = sumWq / n
+		empW = sumW / n
 	}
 
-	empLossProb := 0.0
-	if totalArrived > 0 {
-		empLossProb = float64(totalRejected) / float64(totalArrived)
+	// Теория M/M/1
+	theoP0, theoL, theoLq, theoW, theoWq := 0.0, 0.0, 0.0, 0.0, 0.0
+	stable := rho < 1.0
+	if stable {
+		theoP0 = 1 - rho
+		theoL = rho / (1 - rho)
+		theoLq = rho * rho / (1 - rho)
+		theoW = 1.0 / (mu - lambda)
+		theoWq = rho / (mu - lambda)
 	}
 
-	// Теория M/M/1/1
-	theoP0 := 1.0 / (1.0 + rho)
-	theoP1 := rho / (1.0 + rho)
-	theoL := theoP1
-	theoW := 1.0 / mu
-	theoLambdaEf := lambda * theoP0
-
-	// Распределение вероятностей P(N=k): только k=0 и k=1
-	probDist := []ProbPoint{
-		{N: 0, Emp: stateTime[0] / totalTime, Theo: theoP0},
-		{N: 1, Emp: stateTime[1] / totalTime, Theo: theoP1},
+	// Прореживаем очередь для отображения
+	displayQueue := queuePoints
+	if len(displayQueue) > 1000 {
+		step := len(displayQueue) / 1000
+		sampled := make([]QueuePoint, 0, 1000)
+		for i := 0; i < len(displayQueue); i += step {
+			sampled = append(sampled, displayQueue[i])
+		}
+		displayQueue = sampled
 	}
 
 	return SimResponse{
-		ProbDist:       probDist,
-		Lambda:         lambda,
-		Mu:             mu,
-		Rho:            rho,
-		TotalTime:      totalTime,
-		TotalArrived:   totalArrived,
-		TotalServed:    totalServed,
-		TotalRejected:  totalRejected,
-		EmpL:           empL,
-		EmpW:           empW,
-		EmpUtilization: empUtil,
-		EmpLossProb:    empLossProb,
-		TheoP0:         theoP0,
-		TheoP1:         theoP1,
-		TheoL:          theoL,
-		TheoW:          theoW,
-		TheoLambdaEf:   theoLambdaEf,
+		QueueOverTime:    displayQueue,
+		WaitHistogram:    buildHistogram(waitTimes, 25),
+		SojournHistogram: buildHistogram(sojournTimes, 25),
+		Lambda:           lambda,
+		Mu:               mu,
+		Rho:              rho,
+		TotalTime:        totalTime,
+		TotalCustomers:   len(waitTimes),
+		EmpL:             empL,
+		EmpLq:            empLq,
+		EmpW:             empW,
+		EmpWq:            empWq,
+		EmpUtilization:   empUtil,
+		TheoP0:           theoP0,
+		TheoL:            theoL,
+		TheoLq:           theoLq,
+		TheoW:            theoW,
+		TheoWq:           theoWq,
+		Stable:           stable,
 	}
 }
 

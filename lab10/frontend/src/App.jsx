@@ -8,7 +8,6 @@
 //   α  — интенсивность нетерпения (0 = без нетерпения)
 //
 // Усложнения: ограничение ёмкости (отказ) + нетерпение заявок (abandonment)
-// Теория: формулы Эрланга-B и Эрланга-C
 
 import { useState } from 'react'
 import {
@@ -42,7 +41,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="λ — интенсивность потока"
               value={params.lambda}
-              onChange={v => setParams(p => ({ ...p, lambda: v }))}
+              onChange={v => setParams(p => ({ ...p, lambda: v || 0.1 }))}
               min={0.1} max={200} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -50,7 +49,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="μ — интенсивность обслуживания (прибор)"
               value={params.mu}
-              onChange={v => setParams(p => ({ ...p, mu: v }))}
+              onChange={v => setParams(p => ({ ...p, mu: v || 0.1 }))}
               min={0.1} max={200} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -58,7 +57,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="c — число приборов"
               value={params.c}
-              onChange={v => setParams(p => ({ ...p, c: v }))}
+              onChange={v => setParams(p => ({ ...p, c: v || 1 }))}
               min={1} max={50} step={1}
             />
           </Grid.Col>
@@ -87,7 +86,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
             <NumberInput
               label="T — время моделирования"
               value={params.t}
-              onChange={v => setParams(p => ({ ...p, t: v }))}
+              onChange={v => setParams(p => ({ ...p, t: v || 100 }))}
               min={100} max={1000000} step={500}
             />
           </Grid.Col>
@@ -134,7 +133,6 @@ function QueueDynamicsSection({ data }) {
         <Title order={3}>Динамика очереди и загрузки приборов</Title>
         <Text size="sm" c="dimmed">
           N(t) — число в системе, Q(t) — в очереди, B(t) — занято приборов из {data.c}.
-          Теор. L = {fmt(data.theoL, 3)}, Lq = {fmt(data.theoLq, 3)}.
         </Text>
 
         <ResponsiveContainer width="100%" height={300}>
@@ -150,12 +148,6 @@ function QueueDynamicsSection({ data }) {
             <YAxis label={{ value: 'Заявок', angle: -90, position: 'insideLeft', fontSize: 12 }} />
             <Tooltip />
             <Legend verticalAlign="top" />
-            <ReferenceLine
-              y={data.theoL}
-              stroke="#f03e3e"
-              strokeDasharray="6 3"
-              label={{ value: `L=${fmt(data.theoL,2)}`, fontSize: 10 }}
-            />
             <ReferenceLine y={data.c} stroke="#2f9e44" strokeDasharray="4 4"
               label={{ value: `c=${data.c}`, position: 'right', fontSize: 10 }}
             />
@@ -243,7 +235,6 @@ function LossSection({ data }) {
             <Table.Tr>
               <Table.Th>Событие</Table.Th>
               <Table.Th>Эмп. вероятность</Table.Th>
-              <Table.Th>Теория</Table.Th>
               <Table.Th>Условие</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -255,9 +246,6 @@ function LossSection({ data }) {
                   {pct(data.empRejectionProb)}
                 </Badge>
               </Table.Td>
-              <Table.Td>
-                <Code>{hasK ? '—' : `Erlang-B ≈ ${fmt(data.theoErlangB, 4)}`}</Code>
-              </Table.Td>
               <Table.Td>{hasK ? `K = ${data.k}` : 'K = ∞'}</Table.Td>
             </Table.Tr>
             <Table.Tr>
@@ -267,7 +255,6 @@ function LossSection({ data }) {
                   {pct(data.empAbandonProb)}
                 </Badge>
               </Table.Td>
-              <Table.Td><Code>—</Code></Table.Td>
               <Table.Td>{hasAlpha ? `α = ${data.alpha}` : 'α = 0 (нет)'}</Table.Td>
             </Table.Tr>
           </Table.Tbody>
@@ -291,7 +278,6 @@ function WaitHistSection({ data }) {
         <Title order={3}>Гистограмма времени ожидания Wq</Title>
         <Text size="sm" c="dimmed">
           Эмпирическое распределение времени ожидания обслуженных заявок.
-          Теор. Wq = {fmt(data.theoWq, 4)}, W = {fmt(data.theoW, 4)}.
         </Text>
         <BarChart
           h={260}
@@ -308,78 +294,37 @@ function WaitHistSection({ data }) {
   )
 }
 
-// ─── Статистика M/M/c теория vs эксперимент ──────────────────────────────────
+// ─── Статистика эксперимента ─────────────────────────────────────────────────
 
 function StatsSection({ data }) {
   const rows = [
-    { label: 'L — среднее в системе',           theo: data.theoL,     emp: data.empL },
-    { label: 'Lq — среднее в очереди',           theo: data.theoLq,    emp: data.empLq },
-    { label: 'W — среднее время пребывания',     theo: data.theoW,     emp: data.empW },
-    { label: 'Wq — среднее время ожидания',      theo: data.theoWq,    emp: data.empWq },
-    { label: 'ρ — загрузка 1 прибора',           theo: data.rho,       emp: data.empUtilization },
+    { label: 'L — среднее в системе',       value: data.empL },
+    { label: 'Lq — среднее в очереди',      value: data.empLq },
+    { label: 'W — среднее время пребывания', value: data.empW },
+    { label: 'Wq — среднее время ожидания', value: data.empWq },
+    { label: 'Загрузка 1 прибора',          value: data.empUtilization },
   ]
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="md">
-        <Title order={3}>Теория M/M/c vs Эксперимент</Title>
-
-        <Grid gutter="md">
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <Paper withBorder p="md" radius="md" bg="blue.0">
-              <Text fw={600} size="sm" mb="xs">Эрланг-C: P(ожидание)</Text>
-              <Title order={3}>{fmt(data.theoErlangC, 4)}</Title>
-              <Text size="xs" c="dimmed">
-                Вероятность, что заявка встанет в очередь (M/M/c без K).
-              </Text>
-            </Paper>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 6 }}>
-            <Paper withBorder p="md" radius="md" bg="orange.0">
-              <Text fw={600} size="sm" mb="xs">Эрланг-B: P(отказа) при c=c/c</Text>
-              <Title order={3}>{fmt(data.theoErlangB, 4)}</Title>
-              <Text size="xs" c="dimmed">
-                P(потеря) для M/M/c/c (все приборы = ёмкость), a = {fmt(data.a, 2)} Эрл.
-              </Text>
-            </Paper>
-          </Grid.Col>
-        </Grid>
+        <Title order={3}>Экспериментальные показатели</Title>
 
         <ScrollArea>
           <Table withTableBorder withColumnBorders fz="sm">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Характеристика</Table.Th>
-                <Table.Th>Теория M/M/c</Table.Th>
                 <Table.Th>Эксперимент</Table.Th>
-                <Table.Th>Относит. погрешн.</Table.Th>
-                <Table.Th>Заметка</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {rows.map(row => {
-                const relErr = row.theo !== 0 ? Math.abs(row.emp - row.theo) / Math.abs(row.theo) : 0
                 return (
                   <Table.Tr key={row.label}>
                     <Table.Td fw={600}>{row.label}</Table.Td>
                     <Table.Td>
-                      <Code>{data.stable ? fmt(row.theo, 4) : '∞ (нестаб.)'}</Code>
-                    </Table.Td>
-                    <Table.Td><Code>{fmt(row.emp, 4)}</Code></Table.Td>
-                    <Table.Td>
-                      {data.stable ? (
-                        <Badge
-                          color={relErr < 0.05 ? 'green' : relErr < 0.15 ? 'yellow' : 'red'}
-                          variant="light"
-                        >
-                          {(relErr * 100).toFixed(2)}%
-                        </Badge>
-                      ) : <Text size="xs" c="dimmed">—</Text>}
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed">
-                        {(data.k > 0 || data.alpha > 0) ? 'с усложн.' : 'без усложн.'}
-                      </Text>
+                      <Code>{row.label === 'Загрузка 1 прибора' ? pct(row.value) : fmt(row.value, 4)}</Code>
                     </Table.Td>
                   </Table.Tr>
                 )
@@ -387,20 +332,6 @@ function StatsSection({ data }) {
             </Table.Tbody>
           </Table>
         </ScrollArea>
-
-        <Divider label="Формулы M/M/c (Эрланг-C)" labelPosition="center" />
-        <Paper withBorder p="md" radius="md" bg="gray.0">
-          <Code block fz={11}>{[
-            `a = λ/μ = ${data.lambda}/${data.mu} = ${fmt(data.a, 4)} Эрл.`,
-            `ρ = a/c = ${fmt(data.a, 4)}/${data.c} = ${fmt(data.rho, 4)}`,
-            `C(c,a) = Erlang-C = ${fmt(data.theoErlangC, 4)}  (P(ожидание))`,
-            `B(c,a) = Erlang-B = ${fmt(data.theoErlangB, 4)}  (P(отказа) при K=c)`,
-            `Lq = C(c,a) · ρ / (1−ρ) = ${fmt(data.theoLq, 4)}`,
-            `Wq = Lq / λ = ${fmt(data.theoWq, 4)}`,
-            `W  = Wq + 1/μ = ${fmt(data.theoW, 4)}`,
-            `L  = λ · W = ${fmt(data.theoL, 4)}`,
-          ].join('\n')}</Code>
-        </Paper>
       </Stack>
     </Card>
   )
@@ -419,12 +350,12 @@ export default function App() {
     setError(null)
     try {
       const qs = new URLSearchParams({
-        lambda: params.lambda ?? 4,
-        mu: params.mu ?? 2,
-        c: params.c ?? 3,
-        k: params.k ?? 0,
-        alpha: params.alpha ?? 0,
-        t: params.t ?? 1000,
+        lambda: params.lambda,
+        mu: params.mu,
+        c: params.c,
+        k: params.k,
+        alpha: params.alpha,
+        t: params.t,
       })
       const res = await fetch(`/api/simulate?${qs}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -444,7 +375,7 @@ export default function App() {
             <Title order={1}>Лаб. №10 — M/M/c с усложнениями</Title>
             <Text c="dimmed" size="sm">
               Многоканальная СМО с двумя усложнениями: ограничение ёмкости K (отказ при переполнении)
-              и нетерпение заявок (abandonment). Теория: Эрланг-C и Эрланг-B.
+              и нетерпение заявок (abandonment).
             </Text>
           </div>
 
@@ -468,7 +399,7 @@ export default function App() {
                 <Tabs.Tab value="queue">Динамика очереди</Tabs.Tab>
                 <Tabs.Tab value="loss">Потери и нетерпение</Tabs.Tab>
                 <Tabs.Tab value="wait">Время ожидания</Tabs.Tab>
-                <Tabs.Tab value="stats">Статистика и теория</Tabs.Tab>
+                <Tabs.Tab value="stats">Статистика эксперимента</Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="queue" pt="md">

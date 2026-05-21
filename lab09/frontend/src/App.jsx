@@ -14,7 +14,10 @@ import {
   Paper, ScrollArea, Divider, NumberInput, Alert, RingProgress,
 } from '@mantine/core'
 import { BarChart } from '@mantine/charts'
-
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Legend,
+} from 'recharts'
 import './App.css'
 
 const fmt = (v, d = 4) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—')
@@ -23,7 +26,7 @@ const fmt = (v, d = 4) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) :
 
 function ParamPanel({ params, setParams, onRun, loading }) {
   const rho = params.mu > 0 ? params.lambda / params.mu : Infinity
-  const stable = false // M/M/1 всегда устойчива, очереди нет
+  const stable = rho < 1
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
@@ -35,7 +38,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
               label="λ — интенсивность входного потока"
               description="Заявок в единицу времени"
               value={params.lambda}
-              onChange={v => setParams(p => ({ ...p, lambda: v }))}
+              onChange={v => setParams(p => ({ ...p, lambda: v || 0.1 }))}
               min={0.1} max={100} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -44,7 +47,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
               label="μ — интенсивность обслуживания"
               description="Заявок в единицу времени"
               value={params.mu}
-              onChange={v => setParams(p => ({ ...p, mu: v }))}
+              onChange={v => setParams(p => ({ ...p, mu: v || 0.1 }))}
               min={0.1} max={100} step={0.5} decimalScale={2}
             />
           </Grid.Col>
@@ -53,7 +56,7 @@ function ParamPanel({ params, setParams, onRun, loading }) {
               label="T — время моделирования"
               description="Единицы времени"
               value={params.t}
-              onChange={v => setParams(p => ({ ...p, t: v }))}
+              onChange={v => setParams(p => ({ ...p, t: v || 100 }))}
               min={100} max={100000} step={100}
             />
           </Grid.Col>
@@ -65,16 +68,16 @@ function ParamPanel({ params, setParams, onRun, loading }) {
           </Button>
           <Badge
             size="lg"
-            color="blue"
-            variant="outline"
+            color={stable ? 'green' : 'red'}
+            variant={stable ? 'outline' : 'filled'}
           >
-            ρ = λ/μ = {fmt(rho, 3)} | P₀ = {fmt(1/(1+rho), 3)} | P₁ = {fmt(rho/(1+rho), 3)}
+            ρ = λ/μ = {fmt(rho, 3)} {stable ? '< 1 ✓' : '≥ 1 — система неустойчива!'}
           </Badge>
         </Group>
 
         {!stable && (
-          <Alert color="blue" title="Система M/M/1 всегда устойчива">
-            Очереди нет — заявка либо попадает на обслуживание, либо получает отказ. Система устойчива при любом ρ.
+          <Alert color="red" title="Система M/M/1 неустойчива">
+            При ρ ≥ 1 очередь растёт неограниченно. Увеличьте μ или уменьшите λ.
           </Alert>
         )}
       </Stack>
@@ -82,37 +85,121 @@ function ParamPanel({ params, setParams, onRun, loading }) {
   )
 }
 
-// ─── Распределение вероятностей P(N=k) ───────────────────────────────────────
+// ─── Динамика очереди ────────────────────────────────────────────────────────
 
-function ProbDistSection({ data }) {
-  const chartData = (data.probDist || []).map(p => ({
-    k: String(p.n),
-    'Эмпирическая': parseFloat(p.emp.toFixed(4)),
-    'Теоретическая': parseFloat(p.theo.toFixed(4)),
+function QueueDynamicsSection({ data }) {
+  const chartData = data.queueOverTime.map(p => ({
+    t: parseFloat(p.time.toFixed(2)),
+    'В системе': p.nInSys,
+    'В очереди': p.qLen,
   }))
 
   return (
     <Card withBorder shadow="sm" radius="md" padding="lg">
       <Stack gap="sm">
-        <Title order={3}>Стационарное распределение P(N = k)</Title>
+        <Title order={3}>Динамика очереди</Title>
         <Text size="sm" c="dimmed">
-          Вероятность того, что прибор свободен (k=0) или занят (k=1).
-          Теор. P₀ = 1/(1+ρ) = {fmt(data.theoP0, 3)}, P₁ = ρ/(1+ρ) = {fmt(data.theoP1, 3)}.
+          Число заявок в системе N(t) и в очереди Q(t) в зависимости от времени.
+          Теор. среднее L = {fmt(data.theoL, 3)}, Lq = {fmt(data.theoLq, 3)}.
         </Text>
-        <BarChart
-          h={300}
-          data={chartData}
-          dataKey="k"
-          series={[
-            { name: 'Эмпирическая', color: 'blue.5' },
-            { name: 'Теоретическая', color: 'red.4' },
-          ]}
-          withLegend
-          legendProps={{ verticalAlign: 'top' }}
-          withTooltip
-          xAxisLabel="k — число заявок в системе"
-          yAxisProps={{ tickCount: 6 }}
-        />
+
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 16, bottom: 24, left: 40 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" />
+            <XAxis
+              dataKey="t"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              tickCount={8}
+              label={{ value: 'Время', position: 'insideBottom', offset: -12, fontSize: 12 }}
+            />
+            <YAxis
+              label={{ value: 'Заявок', angle: -90, position: 'insideLeft', fontSize: 12 }}
+            />
+            <Tooltip />
+            <Legend verticalAlign="top" />
+            <ReferenceLine
+              y={data.theoL}
+              stroke="#f03e3e"
+              strokeDasharray="6 3"
+              label={{ value: `L=${fmt(data.theoL,2)}`, position: 'right', fontSize: 10 }}
+            />
+            <ReferenceLine
+              y={data.theoLq}
+              stroke="#e67700"
+              strokeDasharray="4 4"
+              label={{ value: `Lq=${fmt(data.theoLq,2)}`, position: 'right', fontSize: 10 }}
+            />
+            <Area
+              type="stepAfter"
+              dataKey="В системе"
+              stroke="#339AF0"
+              fill="#339AF033"
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Area
+              type="stepAfter"
+              dataKey="В очереди"
+              stroke="#F76707"
+              fill="#F7670733"
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Stack>
+    </Card>
+  )
+}
+
+// ─── Гистограмма времени ожидания ────────────────────────────────────────────
+
+function WaitHistSection({ data }) {
+  const wData = (data.waitHistogram || []).map(b => ({
+    bin: `${fmt(b.lo, 2)}–${fmt(b.hi, 2)}`,
+    'Ожидание': parseFloat(b.freq.toFixed(4)),
+  }))
+  const sData = (data.sojournHistogram || []).map(b => ({
+    bin: `${fmt(b.lo, 2)}–${fmt(b.hi, 2)}`,
+    'В системе': parseFloat(b.freq.toFixed(4)),
+  }))
+
+  return (
+    <Card withBorder shadow="sm" radius="md" padding="lg">
+      <Stack gap="md">
+        <Title order={3}>Распределение времени</Title>
+        <Text size="sm" c="dimmed">
+          Гистограммы эмпирического времени ожидания Wq и пребывания W.
+          Теор.: Wq = {fmt(data.theoWq, 4)}, W = {fmt(data.theoW, 4)}.
+        </Text>
+
+        <Grid gutter="lg">
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Text fw={600} size="sm" mb="xs">Время ожидания Wq</Text>
+            <BarChart
+              h={220}
+              data={wData}
+              dataKey="bin"
+              series={[{ name: 'Ожидание', color: 'blue.5' }]}
+              withTooltip
+              yAxisProps={{ tickCount: 5 }}
+            />
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Text fw={600} size="sm" mb="xs">Время пребывания W</Text>
+            <BarChart
+              h={220}
+              data={sData}
+              dataKey="bin"
+              series={[{ name: 'В системе', color: 'orange.5' }]}
+              withTooltip
+              yAxisProps={{ tickCount: 5 }}
+            />
+          </Grid.Col>
+        </Grid>
       </Stack>
     </Card>
   )
@@ -122,11 +209,12 @@ function ProbDistSection({ data }) {
 
 function StatsSection({ data }) {
   const rows = [
-    { label: 'L — среднее в системе',         theo: data.theoL,    emp: data.empL },
-    { label: 'W — среднее время обслуживания', theo: data.theoW,    emp: data.empW },
-    { label: 'ρ — загрузка прибора = P₁',      theo: data.theoP1,   emp: data.empUtilization },
-    { label: 'P₀ — вероятность простоя',    theo: data.theoP0,   emp: 1 - data.empUtilization },
-    { label: 'Pотк — вероятность отказа',   theo: data.theoP1,   emp: data.empLossProb },
+    { label: 'L — среднее в системе',     theo: data.theoL,   emp: data.empL },
+    { label: 'Lq — среднее в очереди',    theo: data.theoLq,  emp: data.empLq },
+    { label: 'W — среднее время (сист.)', theo: data.theoW,   emp: data.empW },
+    { label: 'Wq — среднее ожидание',     theo: data.theoWq,  emp: data.empWq },
+    { label: 'ρ — загрузка сервера',      theo: data.rho,     emp: data.empUtilization },
+    { label: 'P₀ — вероятность простоя',  theo: data.theoP0,  emp: 1 - data.empUtilization },
   ]
 
   return (
@@ -137,23 +225,26 @@ function StatsSection({ data }) {
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Поступило</Text>
-              <Title order={2} c="gray">{(data.totalArrived ?? 0).toLocaleString()}</Title>
-              <Text size="xs" c="dimmed">заявок</Text>
-            </Paper>
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, sm: 4 }}>
-            <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Обслужено</Text>
-              <Title order={2} c="green">{(data.totalServed ?? 0).toLocaleString()}</Title>
+              <Text size="xs" c="dimmed">Обслужено заявок</Text>
+              <Title order={2} c="blue">{data.totalCustomers.toLocaleString()}</Title>
               <Text size="xs" c="dimmed">за T = {data.totalTime}</Text>
             </Paper>
           </Grid.Col>
           <Grid.Col span={{ base: 12, sm: 4 }}>
             <Paper withBorder p="md" radius="md" ta="center">
-              <Text size="xs" c="dimmed">Отказано</Text>
-              <Title order={2} c="red">{(data.totalRejected ?? 0).toLocaleString()}</Title>
-              <Text size="xs" c="dimmed">{((data.empLossProb ?? 0) * 100).toFixed(1)}% от поступивших</Text>
+              <Text size="xs" c="dimmed">Коэф. загрузки ρ</Text>
+              <Title order={2} c={data.rho < 0.8 ? 'green' : data.rho < 1 ? 'yellow' : 'red'}>
+                {fmt(data.rho, 3)}
+              </Title>
+              <Text size="xs" c="dimmed">λ/μ = {data.lambda}/{data.mu}</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, sm: 4 }}>
+            <Paper withBorder p="md" radius="md" ta="center">
+              <Text size="xs" c="dimmed">Устойчивость</Text>
+              <Badge size="xl" color={data.stable ? 'green' : 'red'} mt="xs">
+                {data.stable ? 'Устойчива (ρ < 1)' : 'Неустойчива (ρ ≥ 1)'}
+              </Badge>
             </Paper>
           </Grid.Col>
         </Grid>
@@ -198,11 +289,11 @@ function StatsSection({ data }) {
         <Paper withBorder p="md" radius="md" bg="gray.0">
           <Code block fz={12}>{[
             `ρ  = λ/μ = ${data.lambda}/${data.mu} = ${fmt(data.rho, 4)}`,
-            `P₀ = 1/(1+ρ) = ${fmt(data.theoP0, 4)}  (вероятность простоя)`,
-            `P₁ = ρ/(1+ρ) = ${fmt(data.theoP1, 4)}  (вероятность отказа = загрузка)`,
-            `L  = P₁ = ${fmt(data.theoL, 4)}`,
-            `W  = 1/μ = 1/${data.mu} = ${fmt(data.theoW, 4)}`,
-            `λеф = λ·P₀ = ${fmt(data.theoLambdaEf, 4)}  (эффективная интенсивность)`,
+            `P₀ = 1 − ρ = ${fmt(data.theoP0, 4)}`,
+            `L  = ρ/(1−ρ) = ${fmt(data.theoL, 4)}`,
+            `Lq = ρ²/(1−ρ) = ${fmt(data.theoLq, 4)}`,
+            `W  = 1/(μ−λ) = 1/${data.mu - data.lambda} = ${fmt(data.theoW, 4)}`,
+            `Wq = ρ/(μ−λ) = ${fmt(data.theoWq, 4)}`,
           ].join('\n')}</Code>
         </Paper>
       </Stack>
@@ -222,7 +313,7 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ lambda: params.lambda ?? 3, mu: params.mu ?? 5, t: params.t ?? 500 })
+      const qs = new URLSearchParams({ lambda: params.lambda, mu: params.mu, t: params.t })
       const res = await fetch(`/api/simulate?${qs}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
@@ -240,7 +331,8 @@ export default function App() {
           <div>
             <Title order={1}>Лаб. №9 — Система M/M/1</Title>
             <Text c="dimmed" size="sm">
-              Одноканальная система без очереди: если прибор занят — отказ. Event-driven симуляция с min-heap очередью событий.
+              Одноканальная система с пуассоновским входным потоком и экспоненциальным
+              временем обслуживания. Event-driven симуляция с min-heap очередью событий.
             </Text>
           </div>
 
@@ -259,14 +351,19 @@ export default function App() {
           )}
 
           {data && !loading && (
-            <Tabs defaultValue="prob" keepMounted={false}>
+            <Tabs defaultValue="queue" keepMounted={false}>
               <Tabs.List>
-                <Tabs.Tab value="prob">Распределение вероятностей</Tabs.Tab>
+                <Tabs.Tab value="queue">Динамика очереди</Tabs.Tab>
+                <Tabs.Tab value="hist">Распределение времени</Tabs.Tab>
                 <Tabs.Tab value="stats">Статистика и теория</Tabs.Tab>
               </Tabs.List>
 
-              <Tabs.Panel value="prob" pt="md">
-                <ProbDistSection data={data} />
+              <Tabs.Panel value="queue" pt="md">
+                <QueueDynamicsSection data={data} />
+              </Tabs.Panel>
+
+              <Tabs.Panel value="hist" pt="md">
+                <WaitHistSection data={data} />
               </Tabs.Panel>
 
               <Tabs.Panel value="stats" pt="md">
